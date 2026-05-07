@@ -19,6 +19,12 @@ final class NotificationService {
         }
     }
 
+    /// Current authorization status — for UI to reflect when a user has
+    /// denied or not yet granted permission.
+    func authorizationStatus() async -> UNAuthorizationStatus {
+        await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+    }
+
     func notifyRuleFired(triggerSummary: String, deviceName: String) {
         guard enabled else { return }
         requestAuthorizationIfNeeded()

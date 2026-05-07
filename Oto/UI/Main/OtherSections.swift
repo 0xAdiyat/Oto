@@ -1,7 +1,10 @@
 import SwiftUI
+import UserNotifications
+import AppKit
 
 struct OverviewView: View {
     @EnvironmentObject var state: AppState
+    @StateObject private var levelMonitor = InputLevelMonitor()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -14,20 +17,23 @@ struct OverviewView: View {
                 statCard(
                     title: "Active Input",
                     value: state.monitor.defaultInputDevice?.name ?? "None",
-                    icon: state.monitor.defaultInputDevice?.kind.systemImage ?? "mic.slash",
-                    tint: state.monitor.defaultInputDevice?.displayTint ?? .secondary
+                    icon: state.monitor.defaultInputDevice?.kind.systemImage ?? "mic-off",
+                    tint: state.monitor.defaultInputDevice?.displayTint ?? .secondary,
+                    extra: AnyView(LevelBar(level: levelMonitor.level).frame(height: 6).padding(.top, 4))
                 )
                 statCard(
                     title: "Connected Devices",
                     value: "\(state.monitor.allDevices.count)",
-                    icon: "ipad.landscape",
-                    tint: .otoTeal
+                    icon: "cable",
+                    tint: .otoTeal,
+                    extra: nil
                 )
                 statCard(
                     title: "Active Rules",
                     value: "\(state.store.rules.filter(\.enabled).count) of \(state.store.rules.count)",
-                    icon: "list.bullet.rectangle",
-                    tint: .otoNavy
+                    icon: "list-checks",
+                    tint: .otoNavy,
+                    extra: nil
                 )
             }
 
@@ -55,17 +61,19 @@ struct OverviewView: View {
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onAppear { levelMonitor.start() }
+        .onDisappear { levelMonitor.stop() }
     }
 
-    private func statCard(title: String, value: String, icon: String, tint: Color) -> some View {
+    private func statCard(title: String, value: String, icon: String, tint: Color, extra: AnyView?) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: icon)
-                .font(.title3)
+            OtoIcon(name: icon, size: 18)
                 .frame(width: 36, height: 36)
                 .background(tint.opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
                 .foregroundStyle(tint)
             Text(title).font(.caption).foregroundStyle(.secondary)
             Text(value).font(.title3).bold().lineLimit(1)
+            if let extra { extra }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
@@ -73,15 +81,15 @@ struct OverviewView: View {
     }
 
     private func fireRow(_ event: RuleFireEvent) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "bolt.fill")
-                .font(.callout)
+        let style = outcomeStyle(event.outcome)
+        return HStack(spacing: 12) {
+            OtoIcon(name: style.icon, size: 14)
                 .frame(width: 28, height: 28)
-                .background(Color.accentColor.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
-                .foregroundStyle(Color.accentColor)
+                .background(style.color.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
+                .foregroundStyle(style.color)
             VStack(alignment: .leading, spacing: 2) {
                 Text(event.ruleSummary).font(.callout)
-                Text("→ \(event.deviceName)")
+                Text("\(style.prefix) \(event.deviceName)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -93,10 +101,21 @@ struct OverviewView: View {
         .padding(10)
         .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
     }
+
+    private func outcomeStyle(_ outcome: RuleFireOutcome) -> (icon: String, color: Color, prefix: String) {
+        switch outcome {
+        case .applied: return ("zap", .accentColor, "→")
+        case .noOp: return ("circle-pause", .secondary, "—")
+        case .targetMissing: return ("triangle-alert", .otoYellow, "Target missing:")
+        case .failed: return ("octagon-x", .otoAlert, "Failed:")
+        }
+    }
 }
 
 struct DevicesView: View {
     @EnvironmentObject var state: AppState
+    @StateObject private var tester = MicTester()
+    @State private var testingDeviceUID: String? = nil
 
     var inputs: [AudioDevice] { state.monitor.allDevices.filter(\.hasInput) }
     var outputs: [AudioDevice] { state.monitor.allDevices.filter(\.hasOutput) }
@@ -141,7 +160,7 @@ struct DevicesView: View {
     private func deviceRow(_ device: AudioDevice, isInput: Bool) -> some View {
         let isCurrentInput = isInput && device.uid == state.monitor.defaultInputDevice?.uid
         return HStack(spacing: 12) {
-            Image(systemName: device.kind.systemImage)
+            OtoIcon(name: device.kind.systemImage, size: 18)
                 .frame(width: 36, height: 36)
                 .background(device.displayTint.opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
                 .foregroundStyle(device.displayTint)
@@ -152,7 +171,22 @@ struct DevicesView: View {
             }
             Spacer()
             if isInput {
+                // Test mic button (only enabled if it's the current default —
+                // AVAudioEngine taps the default input).
                 if isCurrentInput {
+                    Button {
+                        tester.toggleTest()
+                        testingDeviceUID = device.uid
+                    } label: {
+                        switch tester.state {
+                        case .idle: Label { Text("Test") } icon: { OtoIcon(name: "audio-waveform", size: 12) }
+                        case .recording: Label { Text("Recording…") } icon: { OtoIcon(name: "square", size: 12) }
+                        case .playing: Label { Text("Playing…") } icon: { OtoIcon(name: "volume-2", size: 12) }
+                        }
+                    }
+                    .controlSize(.small)
+                    .disabled(testingDeviceUID != nil && testingDeviceUID != device.uid && tester.state != .idle)
+
                     Text("Active")
                         .font(.caption2.bold())
                         .padding(.horizontal, 8).padding(.vertical, 3)
@@ -175,6 +209,7 @@ struct DevicesView: View {
 struct SettingsView: View {
     @State private var launchAtLogin: Bool = LaunchAtLogin.isEnabled
     @AppStorage("Oto.showNotifications") private var showNotifications = true
+    @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -185,26 +220,48 @@ struct SettingsView: View {
                         LaunchAtLogin.setEnabled(newValue)
                         launchAtLogin = LaunchAtLogin.isEnabled
                     }
+
                 Toggle("Show notifications when input switches", isOn: $showNotifications)
                     .onChange(of: showNotifications) { _, newValue in
                         if newValue {
                             NotificationService.shared.requestAuthorizationIfNeeded()
+                            Task { notificationStatus = await NotificationService.shared.authorizationStatus() }
                         }
                     }
+                    .disabled(notificationStatus == .denied)
+
+                if notificationStatus == .denied && showNotifications {
+                    HStack(spacing: 8) {
+                        OtoIcon(name: "triangle-alert", size: 14)
+                            .foregroundStyle(Color.otoYellow)
+                        Text("Notifications are disabled in System Settings.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button("Open System Settings") {
+                            if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                        .controlSize(.small)
+                    }
+                }
             }
             .formStyle(.grouped)
             Spacer()
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .onAppear { launchAtLogin = LaunchAtLogin.isEnabled }
+        .onAppear {
+            launchAtLogin = LaunchAtLogin.isEnabled
+            Task { notificationStatus = await NotificationService.shared.authorizationStatus() }
+        }
     }
 }
 
 struct AboutView: View {
     var body: some View {
         VStack(spacing: 16) {
-            Image("LogoMark")
+            Image("MenuBarIcon")
                 .resizable()
                 .scaledToFit()
                 .frame(height: 96)
@@ -218,8 +275,32 @@ struct AboutView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.top, 8)
+            Text("Tip: install Oto in /Applications and avoid moving it later — login-at-startup tracks the bundle path.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+                .padding(.top, 24)
+                .frame(maxWidth: 360)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(24)
+    }
+}
+
+// MARK: - LevelBar
+
+private struct LevelBar: View {
+    let level: Float
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.secondary.opacity(0.15))
+                Capsule()
+                    .fill(LinearGradient(colors: [.otoTeal, .otoYellow, .otoAlert], startPoint: .leading, endPoint: .trailing))
+                    .frame(width: max(2, geo.size.width * CGFloat(level)))
+            }
+        }
     }
 }

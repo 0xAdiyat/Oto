@@ -3,11 +3,16 @@ import SwiftUI
 
 struct MenuBarView: View {
     @EnvironmentObject var state: AppState
+    @StateObject private var levelMonitor = InputLevelMonitor()
     let openMain: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             header
+            if !state.store.profiles.isEmpty {
+                Divider().padding(.vertical, 6)
+                profileSection
+            }
             Divider().padding(.vertical, 6)
             currentInputSection
             Divider().padding(.vertical, 6)
@@ -16,12 +21,14 @@ struct MenuBarView: View {
             footer
         }
         .padding(12)
-        .frame(width: 320)
+        .frame(width: 340)
+        .onAppear { levelMonitor.start() }
+        .onDisappear { levelMonitor.stop() }
     }
 
     private var header: some View {
         HStack(spacing: 10) {
-            Image("LogoMark")
+            Image("MenuBarIcon")
                 .resizable()
                 .scaledToFit()
                 .frame(height: 28)
@@ -32,10 +39,40 @@ struct MenuBarView: View {
                 Text("Active").font(.caption).foregroundStyle(.secondary)
             }
             Button(action: openMain) {
-                Image(systemName: "gearshape")
+                OtoIcon(name: "settings", size: 16)
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
+        }
+    }
+
+    private var profileSection: some View {
+        HStack(spacing: 8) {
+            Text("Profile").font(.caption).foregroundStyle(.secondary)
+            Spacer()
+            Menu {
+                Button {
+                    state.store.activeProfileID = nil
+                } label: {
+                    Text("All rules active")
+                }
+                Divider()
+                ForEach(state.store.profiles) { p in
+                    Button {
+                        state.store.activeProfileID = p.id
+                    } label: {
+                        Text(p.name)
+                    }
+                }
+            } label: {
+                let active = state.store.profiles.first(where: { $0.id == state.store.activeProfileID })
+                HStack(spacing: 4) {
+                    Text(active?.name ?? "All").font(.caption.bold())
+                    OtoIcon(name: "chevron-down", size: 10)
+                }
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
         }
     }
 
@@ -55,6 +92,9 @@ struct MenuBarView: View {
                             .foregroundStyle(Color.accentColor)
                     )
                 })
+                LevelBar(level: levelMonitor.level)
+                    .frame(height: 4)
+                    .padding(.horizontal, 4)
             } else {
                 Text("No input device").font(.caption).foregroundStyle(.secondary)
             }
@@ -88,7 +128,7 @@ struct MenuBarView: View {
         VStack(spacing: 4) {
             Button(action: openMain) {
                 HStack {
-                    Image(systemName: "arrow.up.right.square")
+                    OtoIcon(name: "square-arrow-out-up-right", size: 14)
                     Text("Open Oto")
                     Spacer()
                 }
@@ -99,7 +139,7 @@ struct MenuBarView: View {
                 NSApplication.shared.terminate(nil)
             } label: {
                 HStack {
-                    Image(systemName: "power")
+                    OtoIcon(name: "power", size: 14)
                     Text("Quit Oto")
                     Spacer()
                     Text("⌘Q").foregroundStyle(.secondary)
@@ -117,7 +157,7 @@ private struct DeviceRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: device.kind.systemImage)
+            OtoIcon(name: device.kind.systemImage, size: 16)
                 .frame(width: 32, height: 32)
                 .background(device.displayTint.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
                 .foregroundStyle(device.displayTint)
@@ -129,5 +169,20 @@ private struct DeviceRow: View {
             trailing()
         }
         .padding(.vertical, 4)
+    }
+}
+
+private struct LevelBar: View {
+    let level: Float
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Color.secondary.opacity(0.15))
+                Capsule()
+                    .fill(LinearGradient(colors: [.otoTeal, .otoYellow, .otoAlert], startPoint: .leading, endPoint: .trailing))
+                    .frame(width: max(2, geo.size.width * CGFloat(level)))
+            }
+        }
     }
 }

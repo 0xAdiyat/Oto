@@ -5,6 +5,8 @@ struct RulesView: View {
     @State private var filter: Filter = .all
     @State private var editingRule: Rule? = nil
     @State private var showingAdd = false
+    @State private var showingTemplates = false
+    @State private var showingProfiles = false
 
     enum Filter: String, CaseIterable, Identifiable {
         case all, active, inactive
@@ -26,17 +28,10 @@ struct RulesView: View {
             if !state.store.rules.isEmpty {
                 filterTabs
             }
-            ScrollView {
-                VStack(spacing: 12) {
-                    if state.store.rules.isEmpty {
-                        emptyState
-                    } else {
-                        ForEach(filteredRules) { rule in
-                            RuleRow(rule: rule, onEdit: { editingRule = rule })
-                        }
-                    }
-                }
-                .padding(.bottom, 24)
+            if state.store.rules.isEmpty {
+                ScrollView { emptyState.padding(.bottom, 24) }
+            } else {
+                rulesList
             }
         }
         .padding(24)
@@ -49,6 +44,38 @@ struct RulesView: View {
             RuleEditorSheet(existing: rule)
                 .environmentObject(state)
         }
+        .sheet(isPresented: $showingTemplates) {
+            TemplatesSheet()
+                .environmentObject(state)
+        }
+    }
+
+    private var rulesList: some View {
+        // List with .onMove for drag-reorder. We always render against the
+        // full ordered list and let the user drag any row, but visually filter
+        // by greying out non-matching rows? Simpler: only allow reordering in
+        // "All" view; in filtered views, reordering is hidden.
+        List {
+            ForEach(filter == .all ? state.store.rules : filteredRules) { rule in
+                RuleRow(rule: rule, onEdit: { editingRule = rule })
+                    .contextMenu {
+                        Button("Edit") { editingRule = rule }
+                        Button("Duplicate") { state.store.duplicate(rule) }
+                        Button(rule.enabled ? "Disable" : "Enable") { state.store.toggle(rule) }
+                        Divider()
+                        Button("Delete", role: .destructive) { state.store.delete(rule) }
+                    }
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+            }
+            .onMove { src, dst in
+                guard filter == .all else { return }
+                state.store.move(fromOffsets: src, toOffset: dst)
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
     }
 
     private var header: some View {
@@ -59,14 +86,64 @@ struct RulesView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Button {
-                showingAdd = true
+            profilePicker
+            Menu {
+                Button("Add custom rule…") { showingAdd = true }
+                Button("From template…") { showingTemplates = true }
             } label: {
-                Label("Add Rule", systemImage: "plus")
+                Label { Text("Add Rule") } icon: { OtoIcon(name: "plus", size: 14) }
+            } primaryAction: {
+                showingAdd = true
             }
+            .menuStyle(.borderlessButton)
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
+            .fixedSize()
         }
+        .sheet(isPresented: $showingProfiles) {
+            ProfilesSheet().environmentObject(state)
+        }
+    }
+
+    private var profilePicker: some View {
+        Menu {
+            Button {
+                state.store.activeProfileID = nil
+            } label: {
+                HStack {
+                    Text("All rules active")
+                    if state.store.activeProfileID == nil {
+                        OtoIcon(name: "check", size: 12)
+                    }
+                }
+            }
+            if !state.store.profiles.isEmpty {
+                Divider()
+                ForEach(state.store.profiles) { p in
+                    Button {
+                        state.store.activeProfileID = p.id
+                    } label: {
+                        Label { Text(p.name) } icon: { OtoIcon(name: p.icon, size: 14) }
+                        if state.store.activeProfileID == p.id {
+                            OtoIcon(name: "check", size: 12)
+                        }
+                    }
+                }
+            }
+            Divider()
+            Button("Manage profiles…") { showingProfiles = true }
+        } label: {
+            HStack(spacing: 6) {
+                let active = state.store.profiles.first(where: { $0.id == state.store.activeProfileID })
+                OtoIcon(name: active?.icon ?? "grid-2x2", size: 14)
+                Text(active?.name ?? "All profiles")
+                OtoIcon(name: "chevron-down", size: 10)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
     }
 
     private var filterTabs: some View {
@@ -97,13 +174,18 @@ struct RulesView: View {
                 }
                 .buttonStyle(.plain)
             }
+            if filter != .all {
+                Text("Drag to reorder available in All")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 8)
+            }
         }
     }
 
     private var emptyState: some View {
         VStack(spacing: 12) {
-            Image(systemName: "list.bullet.rectangle")
-                .font(.system(size: 36))
+            OtoIcon(name: "list-checks", size: 36)
                 .foregroundStyle(.secondary)
             Text("No rules yet").font(.headline)
             Text("Add a rule and Oto will switch your input automatically when devices connect, disconnect, or your Mac wakes.")
@@ -111,13 +193,21 @@ struct RulesView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
-            Button {
-                showingAdd = true
-            } label: {
-                Label("Create your first rule", systemImage: "plus")
+            HStack(spacing: 8) {
+                Button {
+                    showingAdd = true
+                } label: {
+                    Label { Text("Create custom rule") } icon: { OtoIcon(name: "plus", size: 14) }
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                Button {
+                    showingTemplates = true
+                } label: {
+                    Label { Text("From template") } icon: { OtoIcon(name: "wand-sparkles", size: 14) }
+                }
+                .controlSize(.large)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
             .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
@@ -130,20 +220,48 @@ private struct RuleRow: View {
     let rule: Rule
     let onEdit: () -> Void
 
+    /// EC6: re-resolve display name from current device list when available.
+    private func resolvedName(uid: String, fallback: String) -> String {
+        state.monitor.allDevices.first(where: { $0.uid == uid })?.name ?? fallback
+    }
+
+    private var triggerDisplayText: String {
+        switch rule.trigger {
+        case .deviceConnects(let uid, let name):
+            return "When \(resolvedName(uid: uid, fallback: name)) connects"
+        case .deviceDisconnects(let uid, let name):
+            return "When \(resolvedName(uid: uid, fallback: name)) disconnects"
+        case .anyBluetoothConnects: return rule.trigger.displayText
+        case .systemWakes: return rule.trigger.displayText
+        }
+    }
+
+    private var actionDisplayText: String {
+        switch rule.action {
+        case .setInput(let uid, let name): return resolvedName(uid: uid, fallback: name)
+        case .setOutput(let uid, let name): return resolvedName(uid: uid, fallback: name)
+        case .setBoth(let inUID, let inName, let outUID, let outName):
+            let i = resolvedName(uid: inUID, fallback: inName)
+            let o = resolvedName(uid: outUID, fallback: outName)
+            return i == o ? i : "\(i) + \(o)"
+        default: return rule.action.displayText
+        }
+    }
+
     var body: some View {
         HStack(spacing: 14) {
             triggerIconTile
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(rule.trigger.displayText)
+                Text(triggerDisplayText)
                     .font(.callout.weight(.medium))
                 HStack(spacing: 4) {
-                    Image(systemName: "arrow.right").font(.caption2)
+                    OtoIcon(name: "arrow-right", size: 10)
                     if !rule.action.prefixText.isEmpty {
                         Text(rule.action.prefixText)
                             .foregroundStyle(.secondary)
                     }
-                    Text(rule.action.displayText)
+                    Text(actionDisplayText)
                         .foregroundStyle(actionColor)
                         .fontWeight(.medium)
                     if case .keepCurrent = rule.action {
@@ -165,12 +283,14 @@ private struct RuleRow: View {
 
             Menu {
                 Button("Edit", action: onEdit)
+                Button("Duplicate") { state.store.duplicate(rule) }
+                Button(rule.enabled ? "Disable" : "Enable") { state.store.toggle(rule) }
                 Divider()
                 Button("Delete", role: .destructive) {
                     state.store.delete(rule)
                 }
             } label: {
-                Image(systemName: "ellipsis")
+                OtoIcon(name: "ellipsis", size: 16)
                     .padding(8)
             }
             .menuStyle(.borderlessButton)
@@ -183,8 +303,7 @@ private struct RuleRow: View {
 
     private var triggerIconTile: some View {
         let info = triggerIconInfo
-        return Image(systemName: info.icon)
-            .font(.system(size: 18))
+        return OtoIcon(name: info.icon, size: 20)
             .frame(width: 40, height: 40)
             .background(info.color.opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
             .foregroundStyle(info.color)
@@ -198,7 +317,7 @@ private struct RuleRow: View {
             let info = tileFor(uid: uid, name: name, fallbackColor: .otoYellow)
             return (info.icon, .otoYellow)
         case .anyBluetoothConnects:
-            return ("wave.3.right", .otoTeal)
+            return ("bluetooth", .otoTeal)
         case .systemWakes:
             return ("power", .otoNavy)
         }
@@ -209,18 +328,20 @@ private struct RuleRow: View {
             return (device.kind.systemImage, device.displayTint)
         }
         let lower = name.lowercased()
-        if lower.contains("airpods") { return ("airpods.pro", .otoNavy) }
+        if lower.contains("airpods") { return ("ear", .otoNavy) }
         if lower.contains("wh-") || lower.contains("headphone") { return ("headphones", .otoTeal) }
-        if lower.contains("yeti") { return ("mic.fill", .otoAlert) }
-        return ("mic.fill", fallbackColor)
+        if lower.contains("yeti") { return ("mic", .otoAlert) }
+        return ("mic", fallbackColor)
     }
 
     private var actionColor: Color {
         switch rule.action {
-        case .setInput(let uid, _):
+        case .setInput(let uid, _), .setOutput(let uid, _):
             if let device = state.monitor.allDevices.first(where: { $0.uid == uid }) {
                 return device.displayTint
             }
+            return .accentColor
+        case .setBoth, .setInputVolume, .toggleInputMute:
             return .accentColor
         case .keepCurrent:
             return .accentColor
@@ -238,8 +359,12 @@ private struct RuleEditorSheet: View {
     @State private var triggerDeviceUID: String = ""
     @State private var triggerDeviceName: String = ""
     @State private var actionKind: ActionKind = .setInput
-    @State private var actionDeviceUID: String = ""
-    @State private var actionDeviceName: String = ""
+    @State private var inputDeviceUID: String = ""
+    @State private var inputDeviceName: String = ""
+    @State private var outputDeviceUID: String = ""
+    @State private var outputDeviceName: String = ""
+    @State private var volume: Double = 0.5
+    @State private var profileID: UUID? = nil
 
     enum TriggerKind: String, CaseIterable, Identifiable {
         case deviceConnects, deviceDisconnects, anyBluetooth, systemWakes
@@ -255,11 +380,15 @@ private struct RuleEditorSheet: View {
     }
 
     enum ActionKind: String, CaseIterable, Identifiable {
-        case setInput, keepCurrent
+        case setInput, setOutput, setBoth, setInputVolume, toggleInputMute, keepCurrent
         var id: String { rawValue }
         var label: String {
             switch self {
             case .setInput: return "Set input to"
+            case .setOutput: return "Set output to"
+            case .setBoth: return "Set input + output"
+            case .setInputVolume: return "Set input volume"
+            case .toggleInputMute: return "Toggle input mute"
             case .keepCurrent: return "Keep current input"
             }
         }
@@ -288,15 +417,27 @@ private struct RuleEditorSheet: View {
                 Picker("Action", selection: $actionKind) {
                     ForEach(ActionKind.allCases) { k in Text(k.label).tag(k) }
                 }
-                if actionKind == .setInput {
-                    Picker("Input", selection: $actionDeviceUID) {
-                        Text("Select input").tag("")
-                        ForEach(state.inputDevices, id: \.uid) { d in
-                            Text(d.name).tag(d.uid)
-                        }
+                switch actionKind {
+                case .setInput:
+                    inputPicker
+                case .setOutput:
+                    outputPicker
+                case .setBoth:
+                    inputPicker
+                    outputPicker
+                case .setInputVolume:
+                    HStack {
+                        Slider(value: $volume, in: 0...1)
+                        Text("\(Int(volume * 100))%").monospacedDigit().frame(width: 50, alignment: .trailing)
                     }
-                    .onChange(of: actionDeviceUID) { _, newValue in
-                        actionDeviceName = state.inputDevices.first(where: { $0.uid == newValue })?.name ?? actionDeviceName
+                case .toggleInputMute, .keepCurrent:
+                    EmptyView()
+                }
+
+                Picker("Profile", selection: profileBinding) {
+                    Text("Always active").tag(Optional<UUID>.none)
+                    ForEach(state.store.profiles) { p in
+                        Text(p.name).tag(Optional(p.id))
                     }
                 }
             }
@@ -321,33 +462,66 @@ private struct RuleEditorSheet: View {
             }
         }
         .padding(24)
-        .frame(width: 480)
+        .frame(width: 520)
         .onAppear(perform: hydrate)
+    }
+
+    @ViewBuilder
+    private var inputPicker: some View {
+        Picker("Input", selection: $inputDeviceUID) {
+            Text("Select input").tag("")
+            ForEach(state.inputDevices, id: \.uid) { d in
+                Text(d.name).tag(d.uid)
+            }
+        }
+        .onChange(of: inputDeviceUID) { _, newValue in
+            inputDeviceName = state.inputDevices.first(where: { $0.uid == newValue })?.name ?? inputDeviceName
+        }
+    }
+
+    @ViewBuilder
+    private var outputPicker: some View {
+        Picker("Output", selection: $outputDeviceUID) {
+            Text("Select output").tag("")
+            ForEach(state.monitor.allDevices.filter(\.hasOutput), id: \.uid) { d in
+                Text(d.name).tag(d.uid)
+            }
+        }
+        .onChange(of: outputDeviceUID) { _, newValue in
+            outputDeviceName = state.monitor.allDevices.first(where: { $0.uid == newValue })?.name ?? outputDeviceName
+        }
+    }
+
+    private var profileBinding: Binding<UUID?> {
+        Binding(get: { profileID }, set: { profileID = $0 })
     }
 
     private func hydrate() {
         guard let r = existing else { return }
+        profileID = r.profileID
         switch r.trigger {
         case .deviceConnects(let uid, let name):
             triggerKind = .deviceConnects
-            triggerDeviceUID = uid
-            triggerDeviceName = name
+            triggerDeviceUID = uid; triggerDeviceName = name
         case .deviceDisconnects(let uid, let name):
             triggerKind = .deviceDisconnects
-            triggerDeviceUID = uid
-            triggerDeviceName = name
-        case .anyBluetoothConnects:
-            triggerKind = .anyBluetooth
-        case .systemWakes:
-            triggerKind = .systemWakes
+            triggerDeviceUID = uid; triggerDeviceName = name
+        case .anyBluetoothConnects: triggerKind = .anyBluetooth
+        case .systemWakes: triggerKind = .systemWakes
         }
         switch r.action {
         case .setInput(let uid, let name):
-            actionKind = .setInput
-            actionDeviceUID = uid
-            actionDeviceName = name
-        case .keepCurrent:
-            actionKind = .keepCurrent
+            actionKind = .setInput; inputDeviceUID = uid; inputDeviceName = name
+        case .setOutput(let uid, let name):
+            actionKind = .setOutput; outputDeviceUID = uid; outputDeviceName = name
+        case .setBoth(let iu, let iN, let ou, let oN):
+            actionKind = .setBoth
+            inputDeviceUID = iu; inputDeviceName = iN
+            outputDeviceUID = ou; outputDeviceName = oN
+        case .setInputVolume(let v):
+            actionKind = .setInputVolume; volume = v
+        case .toggleInputMute: actionKind = .toggleInputMute
+        case .keepCurrent: actionKind = .keepCurrent
         }
     }
 
@@ -355,10 +529,15 @@ private struct RuleEditorSheet: View {
         switch triggerKind {
         case .deviceConnects, .deviceDisconnects:
             if triggerDeviceUID.isEmpty { return false }
-        case .anyBluetooth, .systemWakes:
-            break
+        case .anyBluetooth, .systemWakes: break
         }
-        if actionKind == .setInput, actionDeviceUID.isEmpty { return false }
+        switch actionKind {
+        case .setInput: if inputDeviceUID.isEmpty { return false }
+        case .setOutput: if outputDeviceUID.isEmpty { return false }
+        case .setBoth:
+            if inputDeviceUID.isEmpty || outputDeviceUID.isEmpty { return false }
+        case .setInputVolume, .toggleInputMute, .keepCurrent: break
+        }
         return true
     }
 
@@ -377,14 +556,98 @@ private struct RuleEditorSheet: View {
         let action: RuleAction
         switch actionKind {
         case .setInput:
-            let name = state.inputDevices.first(where: { $0.uid == actionDeviceUID })?.name ?? actionDeviceName
-            action = .setInput(deviceUID: actionDeviceUID, deviceName: name)
+            let name = state.inputDevices.first(where: { $0.uid == inputDeviceUID })?.name ?? inputDeviceName
+            action = .setInput(deviceUID: inputDeviceUID, deviceName: name)
+        case .setOutput:
+            let name = state.monitor.allDevices.first(where: { $0.uid == outputDeviceUID })?.name ?? outputDeviceName
+            action = .setOutput(deviceUID: outputDeviceUID, deviceName: name)
+        case .setBoth:
+            let inName = state.inputDevices.first(where: { $0.uid == inputDeviceUID })?.name ?? inputDeviceName
+            let outName = state.monitor.allDevices.first(where: { $0.uid == outputDeviceUID })?.name ?? outputDeviceName
+            action = .setBoth(inputUID: inputDeviceUID, inputName: inName, outputUID: outputDeviceUID, outputName: outName)
+        case .setInputVolume:
+            action = .setInputVolume(volume: volume)
+        case .toggleInputMute:
+            action = .toggleInputMute
         case .keepCurrent:
             action = .keepCurrent
         }
         if let r = existing {
-            return Rule(id: r.id, trigger: trigger, action: action, enabled: r.enabled)
+            return Rule(id: r.id, trigger: trigger, action: action, enabled: r.enabled, profileID: profileID)
         }
-        return Rule(trigger: trigger, action: action)
+        return Rule(trigger: trigger, action: action, profileID: profileID)
+    }
+}
+
+// MARK: - Templates
+
+private struct TemplatesSheet: View {
+    @EnvironmentObject var state: AppState
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var selected: Set<UUID> = []
+
+    var templates: [RuleTemplates.Suggestion] {
+        RuleTemplates.suggestions(for: state.monitor.allDevices)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Rule Templates").font(.title2).bold()
+            Text("Suggestions based on your connected devices. Pick the ones you want.")
+                .foregroundStyle(.secondary)
+
+            if templates.isEmpty {
+                Text("No suggestions available. Connect some audio devices first.")
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 24)
+                    .frame(maxWidth: .infinity)
+            } else {
+                ScrollView {
+                    VStack(spacing: 8) {
+                        ForEach(templates) { t in
+                            templateRow(t)
+                        }
+                    }
+                }
+                .frame(maxHeight: 360)
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }
+                Button("Add Selected") {
+                    for t in templates where selected.contains(t.id) {
+                        for r in t.rules { state.store.add(r) }
+                    }
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+                .disabled(selected.isEmpty)
+            }
+        }
+        .padding(24)
+        .frame(width: 560)
+    }
+
+    private func templateRow(_ t: RuleTemplates.Suggestion) -> some View {
+        let isOn = selected.contains(t.id)
+        return Button {
+            if isOn { selected.remove(t.id) } else { selected.insert(t.id) }
+        } label: {
+            HStack(spacing: 12) {
+                OtoIcon(name: isOn ? "circle-check" : "circle", size: 18)
+                    .foregroundStyle(isOn ? Color.accentColor : Color.secondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(t.title).font(.callout.weight(.medium))
+                    Text(t.subtitle).font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .padding(12)
+            .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
     }
 }

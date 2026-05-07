@@ -1,7 +1,21 @@
 import SwiftUI
+import AppKit
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        let me = NSRunningApplication.current
+        let others = NSRunningApplication.runningApplications(
+            withBundleIdentifier: me.bundleIdentifier ?? ""
+        ).filter { $0 != me }
+        for app in others {
+            app.terminate()
+        }
+    }
+}
 
 @main
 struct OtoApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var state = AppState()
     @Environment(\.openWindow) private var openWindow
 
@@ -11,7 +25,10 @@ struct OtoApp: App {
                 .environmentObject(state)
                 .preferredColorScheme(.light)
         } label: {
-            Image(systemName: "mic.fill")
+            Image("MenuBarIcon")
+                .resizable()
+                .scaledToFit()
+                .frame(height: 18)
         }
         .menuBarExtraStyle(.window)
 
