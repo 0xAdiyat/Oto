@@ -17,10 +17,10 @@ enum SidebarSection: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .overview: return "house"
-        case .rules: return "list.bullet.rectangle"
-        case .devices: return "ipad.landscape"
-        case .settings: return "gearshape"
-        case .about: return "info.circle"
+        case .rules: return "list-checks"
+        case .devices: return "cable"
+        case .settings: return "settings"
+        case .about: return "info"
         }
     }
 }
@@ -61,7 +61,7 @@ struct MainWindowView: View {
                             }
                         }
                     } icon: {
-                        Image(systemName: section.systemImage)
+                        OtoIcon(name: section.systemImage, size: 16)
                     }
                     .tag(section)
                 }
@@ -84,10 +84,6 @@ struct MainWindowView: View {
                 Text("v1.0.0").font(.caption2).foregroundStyle(.secondary)
             }
             Spacer()
-            Image("LogoMark")
-                .resizable()
-                .scaledToFit()
-                .frame(height: 44)
         }
         .padding(12)
         .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))

@@ -7,10 +7,10 @@ enum AudioDeviceKind {
 
     var systemImage: String {
         switch self {
-        case .builtIn: return "laptopcomputer"
-        case .usb: return "mic.fill"
-        case .bluetooth: return "wave.3.right"
-        case .airPods: return "airpods.pro"
+        case .builtIn: return "laptop"
+        case .usb: return "mic"
+        case .bluetooth: return "bluetooth"
+        case .airPods: return "ear"
         case .headphones: return "headphones"
         case .other: return "mic"
         }
