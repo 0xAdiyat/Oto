@@ -1,17 +1,26 @@
-//
-//  OtoApp.swift
-//  Oto
-//
-//  Created by Yat on 5/7/26.
-//
-
 import SwiftUI
 
 @main
 struct OtoApp: App {
+    @StateObject private var state = AppState()
+    @Environment(\.openWindow) private var openWindow
+
     var body: some Scene {
-        WindowGroup {
-            ContentView()
+        MenuBarExtra {
+            MenuBarView(openMain: { openWindow(id: "main") })
+                .environmentObject(state)
+                .preferredColorScheme(.light)
+        } label: {
+            Image(systemName: "mic.fill")
         }
+        .menuBarExtraStyle(.window)
+
+        WindowGroup("Oto", id: "main") {
+            MainWindowView()
+                .environmentObject(state)
+                .frame(minWidth: 880, minHeight: 600)
+                .preferredColorScheme(.light)
+        }
+        .windowResizability(.contentSize)
     }
 }

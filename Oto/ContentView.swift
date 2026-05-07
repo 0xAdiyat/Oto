@@ -1,24 +1,19 @@
-//
-//  ContentView.swift
-//  Oto
-//
-//  Created by Yat on 5/7/26.
-//
-
 import SwiftUI
 
+// Legacy placeholder. The active root views are MenuBarView and MainWindowView in OtoApp.swift.
 struct ContentView: View {
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
+        MainWindowView()
     }
 }
 
-#Preview {
-    ContentView()
+#Preview("Main Window") {
+    MainWindowView()
+        .environmentObject(AppState())
+        .frame(width: 980, height: 640)
+}
+
+#Preview("Menu Bar") {
+    MenuBarView(openMain: {})
+        .environmentObject(AppState())
 }
