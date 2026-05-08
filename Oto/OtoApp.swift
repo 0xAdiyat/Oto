@@ -1,7 +1,10 @@
 import SwiftUI
 import AppKit
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    let state = AppState()
+
     func applicationWillFinishLaunching(_ notification: Notification) {
         let me = NSRunningApplication.current
         let others = NSRunningApplication.runningApplications(
@@ -11,19 +14,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             app.terminate()
         }
     }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Hide dock icon — Oto lives in the menu bar.
+        NSApp.setActivationPolicy(.accessory)
+        SpotlightWindowController.shared.install(
+            rootView: MainWindowView().environment(state)
+        )
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        SpotlightWindowController.shared.present(activate: true)
+        return true
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
 }
 
 @main
 struct OtoApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var state = AppState()
-    @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarView(openMain: { openWindow(id: "main") })
-                .environmentObject(state)
-                .preferredColorScheme(.light)
+            MenuBarView(openMain: {
+                SpotlightWindowController.shared.present(activate: true)
+            })
+            .environment(appDelegate.state)
+            .preferredColorScheme(.light)
         } label: {
             Image("MenuBarIcon")
                 .resizable()
@@ -31,13 +51,5 @@ struct OtoApp: App {
                 .frame(height: 18)
         }
         .menuBarExtraStyle(.window)
-
-        WindowGroup("Oto", id: "main") {
-            MainWindowView()
-                .environmentObject(state)
-                .frame(minWidth: 880, minHeight: 600)
-                .preferredColorScheme(.light)
-        }
-        .windowResizability(.contentSize)
     }
 }

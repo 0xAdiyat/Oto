@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ProfilesSheet: View {
-    @EnvironmentObject var state: AppState
+    @Environment(AppState.self) private var state
     @Environment(\.dismiss) private var dismiss
 
     @State private var newName: String = ""
@@ -14,16 +14,22 @@ struct ProfilesSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Profiles").font(.title2).bold()
-            Text("Group related rules and switch between them — e.g. Work, Gaming, Recording. Rules without a profile are always active.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Profiles")
+                    .font(.system(size: OtoUI.titleSize, weight: .semibold))
+                Text("Group related rules and switch between them — e.g. Work, Gaming, Recording. Rules without a profile are always active.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(OtoUI.mutedFG)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(spacing: 6) {
                 if state.store.profiles.isEmpty {
                     Text("No profiles yet.")
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, 8)
+                        .font(.system(size: 13))
+                        .foregroundStyle(OtoUI.mutedFG)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 12)
                 } else {
                     ForEach(state.store.profiles) { p in
                         profileRow(p)
@@ -31,10 +37,10 @@ struct ProfilesSheet: View {
                 }
             }
 
-            Divider()
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Add a profile").font(.headline)
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Add a profile")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(OtoUI.mutedFG)
                 HStack(spacing: 8) {
                     Picker("", selection: $newIcon) {
                         ForEach(iconChoices, id: \.self) { icon in
@@ -44,15 +50,19 @@ struct ProfilesSheet: View {
                     .labelsHidden()
                     .frame(width: 80)
 
-                    TextField("Profile name (e.g. Work)", text: $newName)
+                    TextField("Profile name", text: $newName)
                         .textFieldStyle(.roundedBorder)
 
-                    Button("Add") {
+                    Button {
                         let trimmed = newName.trimmingCharacters(in: .whitespaces)
                         guard !trimmed.isEmpty else { return }
                         state.store.addProfile(Profile(name: trimmed, icon: newIcon))
                         newName = ""
+                    } label: {
+                        Label("Add", systemImage: "plus")
                     }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.otoTeal)
                     .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
@@ -61,18 +71,22 @@ struct ProfilesSheet: View {
                 Spacer()
                 Button("Done") { dismiss() }
                     .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.otoTeal)
             }
         }
-        .padding(24)
-        .frame(width: 520)
+        .padding(26)
+        .frame(width: 540)
+        .materialPanel()
+        .preferredColorScheme(.light)
     }
 
     private func profileRow(_ profile: Profile) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 12) {
             OtoIcon(name: profile.icon, size: 14)
-                .frame(width: 28, height: 28)
-                .background(Color.accentColor.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
-                .foregroundStyle(Color.accentColor)
+                .frame(width: 32, height: 32)
+                .background(OtoUI.iconTile, in: RoundedRectangle(cornerRadius: OtoUI.buttonRadius))
+                .foregroundStyle(.primary.opacity(0.85))
             TextField("Name", text: Binding(
                 get: { profile.name },
                 set: { newValue in
@@ -82,18 +96,17 @@ struct ProfilesSheet: View {
                 }
             ))
             .textFieldStyle(.plain)
+            .font(.system(size: 14, weight: .medium))
             Spacer()
             Text("\(state.store.rules.filter { $0.profileID == profile.id }.count) rules")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            Button(role: .destructive) {
+                .font(.system(size: 12))
+                .foregroundStyle(OtoUI.mutedFG)
+            IconButton(icon: "trash-2", iconSize: 13, help: "Delete") {
                 state.store.deleteProfile(profile)
-            } label: {
-                OtoIcon(name: "trash-2", size: 14)
             }
-            .buttonStyle(.borderless)
         }
-        .padding(8)
-        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(OtoUI.rowIdle, in: RoundedRectangle(cornerRadius: OtoUI.chipRadius))
     }
 }

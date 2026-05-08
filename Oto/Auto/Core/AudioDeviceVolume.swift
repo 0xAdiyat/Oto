@@ -19,14 +19,14 @@ struct AudioDeviceVolume {
     /// Sets input scope volume for a device, clamped 0...1.
     static func setInputVolume(_ device: AudioDevice, volume: Double) throws {
         let clamped = Float32(max(0, min(1, volume)))
-        try setVolume(deviceID: device.id, scope: kAudioObjectPropertyScopeInput, volume: clamped)
+        try setVolume(deviceID: device.deviceID, scope: kAudioObjectPropertyScopeInput, volume: clamped)
     }
 
     /// Toggles input mute for a device. Returns the new mute state.
     @discardableResult
     static func toggleInputMute(_ device: AudioDevice) throws -> Bool {
-        let current = try readMute(deviceID: device.id, scope: kAudioObjectPropertyScopeInput)
-        try writeMute(deviceID: device.id, scope: kAudioObjectPropertyScopeInput, mute: !current)
+        let current = try readMute(deviceID: device.deviceID, scope: kAudioObjectPropertyScopeInput)
+        try writeMute(deviceID: device.deviceID, scope: kAudioObjectPropertyScopeInput, mute: !current)
         return !current
     }
 

@@ -1,20 +1,23 @@
 import CoreAudio
 import Foundation
 import Combine
+import Observation
 
 /// Observes the system audio device list and default input device via CoreAudio
-/// property listeners, publishing changes through @Published properties and
+/// property listeners, publishing changes through stored properties and
 /// PassthroughSubjects for connect/disconnect events.
-final class AudioDeviceMonitor: ObservableObject {
+@Observable
+@MainActor
+final class AudioDeviceMonitor {
 
-    @Published var allDevices: [AudioDevice] = []
-    @Published var defaultInputDevice: AudioDevice?
+    var allDevices: [AudioDevice] = []
+    var defaultInputDevice: AudioDevice?
 
-    let deviceConnected = PassthroughSubject<AudioDevice, Never>()
-    let deviceDisconnected = PassthroughSubject<AudioDevice, Never>()
+    @ObservationIgnored let deviceConnected = PassthroughSubject<AudioDevice, Never>()
+    @ObservationIgnored let deviceDisconnected = PassthroughSubject<AudioDevice, Never>()
 
-    private var devicesListenerInstalled = false
-    private var defaultInputListenerInstalled = false
+    @ObservationIgnored nonisolated(unsafe) private var devicesListenerInstalled = false
+    @ObservationIgnored nonisolated(unsafe) private var defaultInputListenerInstalled = false
 
     init() {
         allDevices = Self.fetchAllDevices()
@@ -28,7 +31,7 @@ final class AudioDeviceMonitor: ObservableObject {
 
     // MARK: - Fetching
 
-    private static func fetchAllDevices() -> [AudioDevice] {
+    private nonisolated static func fetchAllDevices() -> [AudioDevice] {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -52,7 +55,7 @@ final class AudioDeviceMonitor: ObservableObject {
         return deviceIDs.compactMap { AudioDevice.from(deviceID: $0) }
     }
 
-    private static func fetchDefaultInputDevice() -> AudioDevice? {
+    private nonisolated static func fetchDefaultInputDevice() -> AudioDevice? {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultInputDevice,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -101,7 +104,7 @@ final class AudioDeviceMonitor: ObservableObject {
         }
     }
 
-    private func removeListeners() {
+    private nonisolated func removeListeners() {
         let selfPtr = Unmanaged.passUnretained(self).toOpaque()
 
         if devicesListenerInstalled {
@@ -129,7 +132,7 @@ final class AudioDeviceMonitor: ObservableObject {
 
     // MARK: - Callback Handlers (called from CoreAudio thread)
 
-    fileprivate func handleDevicesChanged() {
+    fileprivate nonisolated func handleDevicesChanged() {
         let newDevices = Self.fetchAllDevices()
 
         DispatchQueue.main.async { [weak self] in
@@ -149,7 +152,7 @@ final class AudioDeviceMonitor: ObservableObject {
         }
     }
 
-    fileprivate func handleDefaultInputChanged() {
+    fileprivate nonisolated func handleDefaultInputChanged() {
         let newDefault = Self.fetchDefaultInputDevice()
 
         DispatchQueue.main.async { [weak self] in
@@ -160,7 +163,7 @@ final class AudioDeviceMonitor: ObservableObject {
 
 // MARK: - C-function listener callbacks
 
-private func onDevicesChanged(
+private nonisolated func onDevicesChanged(
     _ objectID: AudioObjectID,
     _ count: UInt32,
     _ addresses: UnsafePointer<AudioObjectPropertyAddress>,
@@ -171,7 +174,7 @@ private func onDevicesChanged(
     return noErr
 }
 
-private func onDefaultInputChanged(
+private nonisolated func onDefaultInputChanged(
     _ objectID: AudioObjectID,
     _ count: UInt32,
     _ addresses: UnsafePointer<AudioObjectPropertyAddress>,

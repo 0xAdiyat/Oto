@@ -1,12 +1,12 @@
 import Foundation
-import Combine
+import Observation
 
+@Observable
 @MainActor
-final class AppState: ObservableObject {
+final class AppState {
     let monitor: AudioDeviceMonitor
     let store: RuleStore
     private let engine: RuleEngine
-    private var cancellables = Set<AnyCancellable>()
 
     init() {
         let monitor = AudioDeviceMonitor()
@@ -14,13 +14,6 @@ final class AppState: ObservableObject {
         self.monitor = monitor
         self.store = store
         self.engine = RuleEngine(monitor: monitor, store: store)
-
-        monitor.objectWillChange
-            .sink { [weak self] in self?.objectWillChange.send() }
-            .store(in: &cancellables)
-        store.objectWillChange
-            .sink { [weak self] in self?.objectWillChange.send() }
-            .store(in: &cancellables)
     }
 
     var inputDevices: [AudioDevice] {
