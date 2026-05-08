@@ -15,6 +15,11 @@ final class RuleEngine {
     /// On system wake, devices may take 1–3s to re-enumerate. Defer eval.
     private let wakeDelay: TimeInterval = 2.0
 
+    /// macOS auto-routes to a newly connected Bluetooth device ~0.5–1 s after
+    /// connection. We wait this long so our rule fires *after* macOS finishes,
+    /// not before (which would let macOS win the race and override our choice).
+    private let bluetoothSettleDelay: TimeInterval = 1.5
+
     init(monitor: AudioDeviceMonitor, store: RuleStore) {
         self.monitor = monitor
         self.store = store
@@ -51,7 +56,20 @@ final class RuleEngine {
             default: return false
             }
         }
-        runBatch(matches)
+        guard !matches.isEmpty else { return }
+
+        // Bluetooth devices trigger macOS automatic routing after connection.
+        // Delay our rule so it runs after macOS finishes, not before.
+        let isBluetooth = device.kind == .bluetooth || device.kind == .airPods
+        if isBluetooth {
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                try? await Task.sleep(for: .seconds(bluetoothSettleDelay))
+                self.runBatch(matches)
+            }
+        } else {
+            runBatch(matches)
+        }
     }
 
     private func handleDisconnected(_ device: AudioDevice) {

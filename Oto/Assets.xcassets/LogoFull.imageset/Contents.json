@@ -1,7 +1,17 @@
 {
   "images" : [
     {
-      "filename" : "logo-oto.svg",
+      "filename" : "logo-full-oto-dark.svg",
+      "idiom" : "universal"
+    },
+    {
+      "appearances" : [
+        {
+          "appearance" : "luminosity",
+          "value" : "dark"
+        }
+      ],
+      "filename" : "logo-full-oto-white.svg",
       "idiom" : "universal"
     }
   ],

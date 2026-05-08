@@ -5,11 +5,11 @@ struct ProfilesSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var newName: String = ""
-    @State private var newIcon: String = "grid-2x2"
+    @State private var newIcon: String = "square.grid.2x2"
 
     private let iconChoices = [
-        "grid-2x2", "briefcase", "gamepad-2", "headphones",
-        "music", "mic", "moon-star", "user-round"
+        "square.grid.2x2", "briefcase", "gamecontroller", "headphones",
+        "music.note", "mic", "moon.stars", "person.crop.circle"
     ]
 
     var body: some View {
@@ -78,7 +78,8 @@ struct ProfilesSheet: View {
         .padding(26)
         .frame(width: 540)
         .materialPanel()
-        .preferredColorScheme(.light)
+        .focusEffectDisabled()
+        .suppressAppKitFocusRings()
     }
 
     private func profileRow(_ profile: Profile) -> some View {
@@ -101,7 +102,7 @@ struct ProfilesSheet: View {
             Text("\(state.store.rules.filter { $0.profileID == profile.id }.count) rules")
                 .font(.system(size: 12))
                 .foregroundStyle(OtoUI.mutedFG)
-            IconButton(icon: "trash-2", iconSize: 13, help: "Delete") {
+            IconButton(icon: "trash", iconSize: 13, help: "Delete") {
                 state.store.deleteProfile(profile)
             }
         }

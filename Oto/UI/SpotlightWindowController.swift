@@ -8,6 +8,14 @@ final class SpotlightWindow: NSWindow {
     override var canBecomeMain: Bool { true }
 }
 
+extension Notification.Name {
+    /// Posted by `SpotlightWindowController` whenever the main window is
+    /// brought on screen via `present()`. Use this to drive the spotlight
+    /// reveal animation on each open instead of `didBecomeActiveNotification`,
+    /// which fires for every internal focus event.
+    static let spotlightWindowDidPresent = Notification.Name("Oto.spotlightWindowDidPresent")
+}
+
 /// Owns the borderless main window and its presentation lifecycle.
 /// Mirrors media-downloader's AppDelegate pattern (presentWindow / orderOut on
 /// resign / re-center on each activation).
@@ -28,9 +36,12 @@ final class SpotlightWindowController {
         let host = NSHostingView(rootView: AnyView(
             rootView
                 .frame(width: size.width, height: size.height)
-                .preferredColorScheme(.light)
         ))
         host.frame = NSRect(origin: .zero, size: size)
+        // Suppress AppKit's exterior focus ring around the hosting view —
+        // otherwise a faint rounded-rect outline appears around the entire
+        // panel whenever the borderless window becomes key.
+        host.focusRingType = .none
         self.hostingView = host
 
         let win = SpotlightWindow(
@@ -47,15 +58,31 @@ final class SpotlightWindowController {
         win.level = .normal
         win.collectionBehavior = [.moveToActiveSpace]
         win.title = "Oto"
-        win.appearance = NSAppearance(named: .aqua)
         self.window = win
 
+        // Auto-hide only when the user truly switches to another app. Two
+        // signals are checked together after a 250ms debounce:
+        //   • `NSApp.isActive` — false means the app stayed inactive past the
+        //     transient focus blips that AppKit fires during normal clicks
+        //     in a borderless window.
+        //   • frontmost app's bundle id ≠ ours — confirms another app
+        //     genuinely owns the foreground.
+        // Either-or isn't enough on its own: SwiftUI focus dance can leave
+        // `isActive` false even while we're still frontmost, and the
+        // frontmost app can briefly switch during system events without
+        // really meaning we lost focus. Requiring both eliminates the
+        // false-positive that was hiding the window mid-tab-click.
+        let myBundleId = Bundle.main.bundleIdentifier
         resignObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didResignActiveNotification,
             object: nil,
             queue: .main
         ) { _ in
             Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(250))
+                guard !NSApp.isActive else { return }
+                let frontId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+                guard frontId != myBundleId else { return }
                 SpotlightWindowController.shared.hide()
             }
         }
@@ -68,6 +95,9 @@ final class SpotlightWindowController {
         if activate {
             NSApp.activate()
         }
+        // Drive the reveal animation off this single deterministic event
+        // rather than the noisy NSApp.didBecomeActiveNotification.
+        NotificationCenter.default.post(name: .spotlightWindowDidPresent, object: nil)
     }
 
     func toggle() {

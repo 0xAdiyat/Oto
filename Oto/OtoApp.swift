@@ -43,12 +43,11 @@ struct OtoApp: App {
                 SpotlightWindowController.shared.present(activate: true)
             })
             .environment(appDelegate.state)
-            .preferredColorScheme(.light)
         } label: {
             Image("MenuBarIcon")
                 .resizable()
                 .scaledToFit()
-                .frame(height: 18)
+                .frame(width: 16, height: 16)
         }
         .menuBarExtraStyle(.window)
     }
