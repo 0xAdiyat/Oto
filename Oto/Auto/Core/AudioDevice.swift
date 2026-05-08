@@ -4,11 +4,17 @@ import Foundation
 /// A CoreAudio device with its identity, display name, and stream capabilities.
 /// Uses `uid` as the stable identity across sessions (AudioDeviceID can change between reboots).
 struct AudioDevice: Identifiable, Hashable, Codable {
-    let id: AudioDeviceID
+    var id: String { uid }
+    let deviceID: AudioDeviceID
     let uid: String
     let name: String
     let hasInput: Bool
     let hasOutput: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case deviceID = "id"
+        case uid, name, hasInput, hasOutput
+    }
 
     static func == (lhs: AudioDevice, rhs: AudioDevice) -> Bool {
         lhs.uid == rhs.uid
@@ -31,7 +37,7 @@ extension AudioDevice {
         let hasInput = hasChannels(deviceID: deviceID, scope: kAudioObjectPropertyScopeInput)
         let hasOutput = hasChannels(deviceID: deviceID, scope: kAudioObjectPropertyScopeOutput)
 
-        return AudioDevice(id: deviceID, uid: uid, name: name, hasInput: hasInput, hasOutput: hasOutput)
+        return AudioDevice(deviceID: deviceID, uid: uid, name: name, hasInput: hasInput, hasOutput: hasOutput)
     }
 
     // MARK: Private helpers

@@ -2,28 +2,36 @@ import AppKit
 import SwiftUI
 
 struct MenuBarView: View {
-    @EnvironmentObject var state: AppState
-    @StateObject private var levelMonitor = InputLevelMonitor()
+    @Environment(AppState.self) private var state
     let openMain: () -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 10) {
             header
+
             if !state.store.profiles.isEmpty {
-                Divider().padding(.vertical, 6)
+                divider
                 profileSection
             }
-            Divider().padding(.vertical, 6)
+
+            divider
             currentInputSection
-            Divider().padding(.vertical, 6)
+
+            divider
             connectedInputsSection
-            Divider().padding(.vertical, 6)
+
+            divider
             footer
         }
-        .padding(12)
+        .padding(14)
         .frame(width: 340)
-        .onAppear { levelMonitor.start() }
-        .onDisappear { levelMonitor.stop() }
+    }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(OtoUI.dividerColor)
+            .frame(height: 1)
+            .padding(.vertical, 2)
     }
 
     private var header: some View {
@@ -31,24 +39,27 @@ struct MenuBarView: View {
             Image("MenuBarIcon")
                 .resizable()
                 .scaledToFit()
-                .frame(height: 28)
-            Text("Oto").font(.headline)
+                .frame(height: 24)
+            Text("Oto")
+                .font(.system(size: 14, weight: .semibold))
             Spacer()
-            HStack(spacing: 4) {
+            HStack(spacing: 5) {
                 Circle().fill(Color.otoTeal).frame(width: 7, height: 7)
-                Text("Active").font(.caption).foregroundStyle(.secondary)
+                Text("Active")
+                    .font(.system(size: 11))
+                    .foregroundStyle(OtoUI.secondaryFG)
             }
-            Button(action: openMain) {
-                OtoIcon(name: "settings", size: 16)
+            IconButton(icon: "settings", iconSize: 14, help: "Open Oto") {
+                openMain()
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
         }
     }
 
     private var profileSection: some View {
         HStack(spacing: 8) {
-            Text("Profile").font(.caption).foregroundStyle(.secondary)
+            Text("Profile")
+                .font(.system(size: 11))
+                .foregroundStyle(OtoUI.mutedFG)
             Spacer()
             Menu {
                 Button {
@@ -67,11 +78,17 @@ struct MenuBarView: View {
             } label: {
                 let active = state.store.profiles.first(where: { $0.id == state.store.activeProfileID })
                 HStack(spacing: 4) {
-                    Text(active?.name ?? "All").font(.caption.bold())
-                    OtoIcon(name: "chevron-down", size: 10)
+                    Text(active?.name ?? "All")
+                        .font(.system(size: 11, weight: .medium))
+                    OtoIcon(name: "chevron-down", size: 9)
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(OtoUI.rowIdle, in: Capsule())
+                .foregroundStyle(OtoUI.secondaryFG)
             }
             .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
             .fixedSize()
         }
     }
@@ -79,24 +96,21 @@ struct MenuBarView: View {
     private var currentInputSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Current Input")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 11))
+                .foregroundStyle(OtoUI.mutedFG)
             if let current = state.monitor.defaultInputDevice {
-                DeviceRow(device: current, trailing: {
-                    AnyView(
-                        Text("Active")
-                            .font(.caption2.bold())
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Color.accentColor.opacity(0.15), in: Capsule())
-                            .foregroundStyle(Color.accentColor)
-                    )
-                })
-                LevelBar(level: levelMonitor.level)
-                    .frame(height: 4)
-                    .padding(.horizontal, 4)
+                DeviceRow(device: current) {
+                    Text("Active")
+                        .font(.system(size: 10, weight: .bold))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.otoTeal.opacity(0.18), in: Capsule())
+                        .foregroundStyle(Color.otoTeal)
+                }
             } else {
-                Text("No input device").font(.caption).foregroundStyle(.secondary)
+                Text("No input device")
+                    .font(.system(size: 11))
+                    .foregroundStyle(OtoUI.mutedFG)
             }
         }
     }
@@ -104,17 +118,33 @@ struct MenuBarView: View {
     private var connectedInputsSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Connected Inputs")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 11))
+                .foregroundStyle(OtoUI.mutedFG)
 
-            ForEach(otherInputs) { device in
-                DeviceRow(device: device, trailing: {
-                    AnyView(
-                        Button("Switch") { state.switchTo(device) }
-                            .buttonStyle(.bordered)
-                            .controlSize(.small)
-                    )
-                })
+            if otherInputs.isEmpty {
+                Text("No other inputs connected.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(OtoUI.mutedFG)
+                    .padding(.vertical, 4)
+            } else {
+                ForEach(otherInputs) { device in
+                    DeviceRow(device: device) {
+                        Button {
+                            state.switchTo(device)
+                        } label: {
+                            Text("Switch")
+                                .font(.system(size: 11, weight: .medium))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(OtoUI.rowIdle, in: Capsule())
+                                .overlay {
+                                    Capsule().strokeBorder(OtoUI.dividerColor, lineWidth: 1)
+                                }
+                                .foregroundStyle(OtoUI.secondaryFG)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
         }
     }
@@ -125,64 +155,77 @@ struct MenuBarView: View {
     }
 
     private var footer: some View {
-        VStack(spacing: 4) {
-            Button(action: openMain) {
-                HStack {
-                    OtoIcon(name: "square-arrow-out-up-right", size: 14)
-                    Text("Open Oto")
-                    Spacer()
-                }
-            }
-            .buttonStyle(.plain)
-
-            Button {
+        VStack(spacing: 2) {
+            footerButton(icon: "square-arrow-out-up-right", title: "Open Oto", trailing: nil, action: openMain)
+            footerButton(icon: "power", title: "Quit Oto", trailing: "⌘Q") {
                 NSApplication.shared.terminate(nil)
-            } label: {
-                HStack {
-                    OtoIcon(name: "power", size: 14)
-                    Text("Quit Oto")
-                    Spacer()
-                    Text("⌘Q").foregroundStyle(.secondary)
-                }
             }
-            .buttonStyle(.plain)
             .keyboardShortcut("q")
         }
     }
+
+    private func footerButton(icon: String, title: String, trailing: String?, action: @escaping () -> Void) -> some View {
+        FooterButton(icon: icon, title: title, trailing: trailing, action: action)
+    }
 }
 
-private struct DeviceRow: View {
+private struct FooterButton: View {
+    let icon: String
+    let title: String
+    let trailing: String?
+    let action: () -> Void
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                OtoIcon(name: icon, size: 13)
+                    .foregroundStyle(OtoUI.secondaryFG)
+                Text(title)
+                    .font(.system(size: 12, weight: .medium))
+                Spacer()
+                if let trailing {
+                    Text(trailing)
+                        .font(.system(size: 11))
+                        .foregroundStyle(OtoUI.mutedFG)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: OtoUI.buttonRadius)
+                    .fill(isHovering ? OtoUI.rowHover : Color.clear)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .animation(OtoUI.hoverEase, value: isHovering)
+    }
+}
+
+private struct DeviceRow<Trailing: View>: View {
     let device: AudioDevice
-    let trailing: () -> AnyView
+    @ViewBuilder let trailing: Trailing
 
     var body: some View {
         HStack(spacing: 10) {
             OtoIcon(name: device.kind.systemImage, size: 16)
                 .frame(width: 32, height: 32)
-                .background(device.displayTint.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
-                .foregroundStyle(device.displayTint)
+                .background(OtoUI.iconTile, in: RoundedRectangle(cornerRadius: 8))
+                .foregroundStyle(.primary.opacity(0.85))
             VStack(alignment: .leading, spacing: 2) {
-                Text(device.name).font(.callout)
-                Text(device.kind.label).font(.caption2).foregroundStyle(.secondary)
+                Text(device.name)
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
+                Text(device.kind.label)
+                    .font(.system(size: 10))
+                    .foregroundStyle(OtoUI.mutedFG)
             }
             Spacer()
-            trailing()
+            trailing
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
     }
 }
 
-private struct LevelBar: View {
-    let level: Float
-    var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Color.secondary.opacity(0.15))
-                Capsule()
-                    .fill(LinearGradient(colors: [.otoTeal, .otoYellow, .otoAlert], startPoint: .leading, endPoint: .trailing))
-                    .frame(width: max(2, geo.size.width * CGFloat(level)))
-            }
-        }
-    }
-}

@@ -1,18 +1,17 @@
 import SwiftUI
 
-struct RulesView: View {
-    @EnvironmentObject var state: AppState
-    @State private var filter: Filter = .all
-    @State private var editingRule: Rule? = nil
-    @State private var showingAdd = false
-    @State private var showingTemplates = false
-    @State private var showingProfiles = false
+// MARK: - RulesPanel
 
-    enum Filter: String, CaseIterable, Identifiable {
-        case all, active, inactive
-        var id: String { rawValue }
-        var label: String { rawValue.capitalized }
-    }
+/// Material card containing the list of rule rows. Replaces the old
+/// `RulesView` which lived inside a NavigationSplitView detail.
+struct RulesPanel: View {
+    @Environment(AppState.self) private var state
+    let filter: RuleFilter
+    let onEdit: (Rule) -> Void
+
+    private let rowHeight: CGFloat = 78
+    private let panelInsets: CGFloat = 10
+    private let visibleRowLimit = 5
 
     var filteredRules: [Rule] {
         switch filter {
@@ -23,204 +22,76 @@ struct RulesView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            header
-            if !state.store.rules.isEmpty {
-                filterTabs
-            }
+        Group {
             if state.store.rules.isEmpty {
-                ScrollView { emptyState.padding(.bottom, 24) }
+                emptyState
+                    .frame(width: OtoUI.pillWidth)
+                    .frame(minHeight: 320)
+                    .materialPanel(strongShadow: false)
             } else {
                 rulesList
+                    .frame(width: OtoUI.pillWidth)
+                    .frame(height: panelHeight)
+                    .materialPanel(strongShadow: false)
             }
         }
-        .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .sheet(isPresented: $showingAdd) {
-            RuleEditorSheet(existing: nil)
-                .environmentObject(state)
-        }
-        .sheet(item: $editingRule) { rule in
-            RuleEditorSheet(existing: rule)
-                .environmentObject(state)
-        }
-        .sheet(isPresented: $showingTemplates) {
-            TemplatesSheet()
-                .environmentObject(state)
-        }
+    }
+
+    private var panelHeight: CGFloat {
+        let visible = min(max(filteredRules.count, 1), visibleRowLimit)
+        return CGFloat(visible) * rowHeight + panelInsets * 2
     }
 
     private var rulesList: some View {
-        // List with .onMove for drag-reorder. We always render against the
-        // full ordered list and let the user drag any row, but visually filter
-        // by greying out non-matching rows? Simpler: only allow reordering in
-        // "All" view; in filtered views, reordering is hidden.
-        List {
-            ForEach(filter == .all ? state.store.rules : filteredRules) { rule in
-                RuleRow(rule: rule, onEdit: { editingRule = rule })
-                    .contextMenu {
-                        Button("Edit") { editingRule = rule }
-                        Button("Duplicate") { state.store.duplicate(rule) }
-                        Button(rule.enabled ? "Disable" : "Enable") { state.store.toggle(rule) }
-                        Divider()
-                        Button("Delete", role: .destructive) { state.store.delete(rule) }
-                    }
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
-            }
-            .onMove { src, dst in
-                guard filter == .all else { return }
-                state.store.move(fromOffsets: src, toOffset: dst)
-            }
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-    }
-
-    private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Rules").font(.largeTitle).bold()
-                Text("Oto automatically switches your input based on these rules.")
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            profilePicker
-            Menu {
-                Button("Add custom rule…") { showingAdd = true }
-                Button("From template…") { showingTemplates = true }
-            } label: {
-                Label { Text("Add Rule") } icon: { OtoIcon(name: "plus", size: 14) }
-            } primaryAction: {
-                showingAdd = true
-            }
-            .menuStyle(.borderlessButton)
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .fixedSize()
-        }
-        .sheet(isPresented: $showingProfiles) {
-            ProfilesSheet().environmentObject(state)
-        }
-    }
-
-    private var profilePicker: some View {
-        Menu {
-            Button {
-                state.store.activeProfileID = nil
-            } label: {
-                HStack {
-                    Text("All rules active")
-                    if state.store.activeProfileID == nil {
-                        OtoIcon(name: "check", size: 12)
-                    }
-                }
-            }
-            if !state.store.profiles.isEmpty {
-                Divider()
-                ForEach(state.store.profiles) { p in
-                    Button {
-                        state.store.activeProfileID = p.id
-                    } label: {
-                        Label { Text(p.name) } icon: { OtoIcon(name: p.icon, size: 14) }
-                        if state.store.activeProfileID == p.id {
-                            OtoIcon(name: "check", size: 12)
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(filter == .all ? state.store.rules : filteredRules) { rule in
+                    RuleRow(rule: rule, onEdit: { onEdit(rule) })
+                        .contextMenu {
+                            Button("Edit") { onEdit(rule) }
+                            Button("Duplicate") { state.store.duplicate(rule) }
+                            Button(rule.enabled ? "Disable" : "Enable") { state.store.toggle(rule) }
+                            Divider()
+                            Button("Delete", role: .destructive) { state.store.delete(rule) }
                         }
-                    }
                 }
-            }
-            Divider()
-            Button("Manage profiles…") { showingProfiles = true }
-        } label: {
-            HStack(spacing: 6) {
-                let active = state.store.profiles.first(where: { $0.id == state.store.activeProfileID })
-                OtoIcon(name: active?.icon ?? "grid-2x2", size: 14)
-                Text(active?.name ?? "All profiles")
-                OtoIcon(name: "chevron-down", size: 10)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.vertical, panelInsets)
         }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-    }
-
-    private var filterTabs: some View {
-        HStack(spacing: 6) {
-            ForEach(Filter.allCases) { f in
-                let count: Int = {
-                    switch f {
-                    case .all: return state.store.rules.count
-                    case .active: return state.store.rules.filter(\.enabled).count
-                    case .inactive: return state.store.rules.filter { !$0.enabled }.count
-                    }
-                }()
-                Button {
-                    filter = f
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(f.label)
-                        Text("\(count)")
-                            .font(.caption)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 1)
-                            .background(Color.secondary.opacity(0.18), in: Capsule())
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(filter == f ? Color.accentColor.opacity(0.15) : Color.clear, in: Capsule())
-                    .foregroundStyle(filter == f ? Color.accentColor : .primary)
-                }
-                .buttonStyle(.plain)
-            }
-            if filter != .all {
-                Text("Drag to reorder available in All")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 8)
-            }
-        }
+        .scrollIndicators(.hidden)
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 14) {
             OtoIcon(name: "list-checks", size: 36)
-                .foregroundStyle(.secondary)
-            Text("No rules yet").font(.headline)
+                .foregroundStyle(OtoUI.mutedFG)
+            Text("No rules yet")
+                .font(.system(size: 17, weight: .semibold))
             Text("Add a rule and Oto will switch your input automatically when devices connect, disconnect, or your Mac wakes.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 13))
+                .foregroundStyle(OtoUI.mutedFG)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 420)
-            HStack(spacing: 8) {
-                Button {
-                    showingAdd = true
-                } label: {
-                    Label { Text("Create custom rule") } icon: { OtoIcon(name: "plus", size: 14) }
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                Button {
-                    showingTemplates = true
-                } label: {
-                    Label { Text("From template") } icon: { OtoIcon(name: "wand-sparkles", size: 14) }
-                }
-                .controlSize(.large)
-            }
-            .padding(.top, 4)
+                .frame(maxWidth: 440)
+            Text("Use the + button in the header to add one.")
+                .font(.system(size: 12))
+                .foregroundStyle(OtoUI.mutedFG)
+                .padding(.top, 4)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(40)
     }
 }
 
-private struct RuleRow: View {
-    @EnvironmentObject var state: AppState
+// MARK: - RuleRow
+
+struct RuleRow: View {
+    @Environment(AppState.self) private var state
     let rule: Rule
     let onEdit: () -> Void
 
-    /// EC6: re-resolve display name from current device list when available.
+    @State private var isHovering = false
+
     private func resolvedName(uid: String, fallback: String) -> String {
         state.monitor.allDevices.first(where: { $0.uid == uid })?.name ?? fallback
     }
@@ -231,8 +102,8 @@ private struct RuleRow: View {
             return "When \(resolvedName(uid: uid, fallback: name)) connects"
         case .deviceDisconnects(let uid, let name):
             return "When \(resolvedName(uid: uid, fallback: name)) disconnects"
-        case .anyBluetoothConnects: return rule.trigger.displayText
-        case .systemWakes: return rule.trigger.displayText
+        case .anyBluetoothConnects, .systemWakes:
+            return rule.trigger.displayText
         }
     }
 
@@ -250,107 +121,122 @@ private struct RuleRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            triggerIconTile
+            triggerTile
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text(triggerDisplayText)
-                    .font(.callout.weight(.medium))
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
                 HStack(spacing: 4) {
                     OtoIcon(name: "arrow-right", size: 10)
+                        .foregroundStyle(OtoUI.mutedFG)
                     if !rule.action.prefixText.isEmpty {
                         Text(rule.action.prefixText)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(OtoUI.mutedFG)
                     }
                     Text(actionDisplayText)
-                        .foregroundStyle(actionColor)
+                        .foregroundStyle(rule.enabled ? Color.otoTeal : OtoUI.mutedFG)
                         .fontWeight(.medium)
                     if case .keepCurrent = rule.action {
-                        Text("(do nothing)")
-                            .foregroundStyle(.secondary)
+                        Text("(do nothing)").foregroundStyle(OtoUI.mutedFG)
                     }
                 }
-                .font(.caption)
+                .font(.system(size: 12))
+                .lineLimit(1)
             }
 
-            Spacer()
+            Spacer(minLength: 12)
 
-            Toggle("", isOn: Binding(
-                get: { rule.enabled },
-                set: { _ in state.store.toggle(rule) }
-            ))
-            .toggleStyle(.switch)
-            .labelsHidden()
+            HStack(spacing: 4) {
+                Toggle("", isOn: Binding(
+                    get: { rule.enabled },
+                    set: { _ in state.store.toggle(rule) }
+                ))
+                .toggleStyle(.switch)
+                .labelsHidden()
+                .controlSize(.small)
+                .tint(.otoTeal)
 
-            Menu {
-                Button("Edit", action: onEdit)
-                Button("Duplicate") { state.store.duplicate(rule) }
-                Button(rule.enabled ? "Disable" : "Enable") { state.store.toggle(rule) }
-                Divider()
-                Button("Delete", role: .destructive) {
-                    state.store.delete(rule)
+                IconButton(icon: "settings", iconSize: 13, help: "Edit", action: onEdit)
+
+                IconButton(
+                    icon: "ellipsis",
+                    iconSize: 13,
+                    help: "More",
+                    action: {}
+                )
+                .overlay {
+                    // Use a Menu underneath to give the icon button a real menu.
+                    Menu {
+                        Button("Edit", action: onEdit)
+                        Button("Duplicate") { state.store.duplicate(rule) }
+                        Button(rule.enabled ? "Disable" : "Enable") { state.store.toggle(rule) }
+                        Divider()
+                        Button("Delete", role: .destructive) { state.store.delete(rule) }
+                    } label: {
+                        Color.clear
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
                 }
-            } label: {
-                OtoIcon(name: "ellipsis", size: 16)
-                    .padding(8)
             }
-            .menuStyle(.borderlessButton)
-            .frame(width: 28)
+            .opacity(isHovering ? 1 : 0.72)
         }
-        .padding(14)
-        .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+        .padding(.horizontal, 10)
+        .frame(height: 70)
+        .background {
+            RoundedRectangle(cornerRadius: OtoUI.cardRadius, style: .continuous)
+                .fill(isHovering ? OtoUI.rowSelected : Color.clear)
+        }
+        .contentShape(Rectangle())
         .opacity(rule.enabled ? 1.0 : 0.55)
+        .onHover { isHovering = $0 }
+        .animation(OtoUI.hoverEase, value: isHovering)
     }
 
-    private var triggerIconTile: some View {
+    private var triggerTile: some View {
         let info = triggerIconInfo
         return OtoIcon(name: info.icon, size: 20)
-            .frame(width: 40, height: 40)
-            .background(info.color.opacity(0.15), in: RoundedRectangle(cornerRadius: 10))
-            .foregroundStyle(info.color)
+            .frame(width: OtoUI.triggerTileSize, height: OtoUI.triggerTileSize)
+            .background(OtoUI.iconTile, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(OtoUI.strokeColor.opacity(0.6), lineWidth: 1)
+            }
+            .foregroundStyle(.primary.opacity(0.85))
+            .accessibilityHidden(true)
+            .help(info.label)
     }
 
-    private var triggerIconInfo: (icon: String, color: Color) {
+    private var triggerIconInfo: (icon: String, label: String) {
         switch rule.trigger {
         case .deviceConnects(let uid, let name):
-            return tileFor(uid: uid, name: name, fallbackColor: .otoTeal)
+            return tileFor(uid: uid, name: name, label: "Connect")
         case .deviceDisconnects(let uid, let name):
-            let info = tileFor(uid: uid, name: name, fallbackColor: .otoYellow)
-            return (info.icon, .otoYellow)
+            return tileFor(uid: uid, name: name, label: "Disconnect")
         case .anyBluetoothConnects:
-            return ("bluetooth", .otoTeal)
+            return ("bluetooth", "Bluetooth connects")
         case .systemWakes:
-            return ("power", .otoNavy)
+            return ("power", "System wakes")
         }
     }
 
-    private func tileFor(uid: String, name: String, fallbackColor: Color) -> (icon: String, color: Color) {
+    private func tileFor(uid: String, name: String, label: String) -> (icon: String, label: String) {
         if let device = state.monitor.allDevices.first(where: { $0.uid == uid }) {
-            return (device.kind.systemImage, device.displayTint)
+            return (device.kind.systemImage, label)
         }
         let lower = name.lowercased()
-        if lower.contains("airpods") { return ("ear", .otoNavy) }
-        if lower.contains("wh-") || lower.contains("headphone") { return ("headphones", .otoTeal) }
-        if lower.contains("yeti") { return ("mic", .otoAlert) }
-        return ("mic", fallbackColor)
-    }
-
-    private var actionColor: Color {
-        switch rule.action {
-        case .setInput(let uid, _), .setOutput(let uid, _):
-            if let device = state.monitor.allDevices.first(where: { $0.uid == uid }) {
-                return device.displayTint
-            }
-            return .accentColor
-        case .setBoth, .setInputVolume, .toggleInputMute:
-            return .accentColor
-        case .keepCurrent:
-            return .accentColor
-        }
+        if lower.contains("airpods") { return ("ear", label) }
+        if lower.contains("wh-") || lower.contains("headphone") { return ("headphones", label) }
+        return ("mic", label)
     }
 }
 
-private struct RuleEditorSheet: View {
-    @EnvironmentObject var state: AppState
+// MARK: - RuleEditorSheet
+
+struct RuleEditorSheet: View {
+    @Environment(AppState.self) private var state
     @Environment(\.dismiss) private var dismiss
 
     let existing: Rule?
@@ -395,28 +281,41 @@ private struct RuleEditorSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(existing == nil ? "New Rule" : "Edit Rule").font(.title2).bold()
+        VStack(alignment: .leading, spacing: 18) {
+            Text(existing == nil ? "New rule" : "Edit rule")
+                .font(.system(size: OtoUI.titleSize, weight: .semibold))
 
-            Form {
-                Picker("Trigger", selection: $triggerKind) {
-                    ForEach(TriggerKind.allCases) { k in Text(k.label).tag(k) }
+            VStack(spacing: 0) {
+                FormRow(label: "Trigger") {
+                    Picker("", selection: $triggerKind) {
+                        ForEach(TriggerKind.allCases) { k in Text(k.label).tag(k) }
+                    }
+                    .labelsHidden()
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                 }
+
                 if triggerKind == .deviceConnects || triggerKind == .deviceDisconnects {
-                    Picker("Device", selection: $triggerDeviceUID) {
-                        Text("Select device").tag("")
-                        ForEach(state.monitor.allDevices, id: \.uid) { d in
-                            Text(d.name).tag(d.uid)
+                    FormRow(label: "Device") {
+                        Picker("", selection: $triggerDeviceUID) {
+                            Text("Select device").tag("")
+                            ForEach(state.monitor.allDevices, id: \.uid) { d in
+                                Text(d.name).tag(d.uid)
+                            }
+                        }
+                        .labelsHidden()
+                        .onChange(of: triggerDeviceUID) { _, newValue in
+                            triggerDeviceName = state.monitor.allDevices.first(where: { $0.uid == newValue })?.name ?? triggerDeviceName
                         }
                     }
-                    .onChange(of: triggerDeviceUID) { _, newValue in
-                        triggerDeviceName = state.monitor.allDevices.first(where: { $0.uid == newValue })?.name ?? triggerDeviceName
-                    }
                 }
 
-                Picker("Action", selection: $actionKind) {
-                    ForEach(ActionKind.allCases) { k in Text(k.label).tag(k) }
+                FormRow(label: "Action") {
+                    Picker("", selection: $actionKind) {
+                        ForEach(ActionKind.allCases) { k in Text(k.label).tag(k) }
+                    }
+                    .labelsHidden()
                 }
+
                 switch actionKind {
                 case .setInput:
                     inputPicker
@@ -426,26 +325,35 @@ private struct RuleEditorSheet: View {
                     inputPicker
                     outputPicker
                 case .setInputVolume:
-                    HStack {
-                        Slider(value: $volume, in: 0...1)
-                        Text("\(Int(volume * 100))%").monospacedDigit().frame(width: 50, alignment: .trailing)
+                    FormRow(label: "Volume") {
+                        HStack {
+                            Slider(value: $volume, in: 0...1)
+                            Text("\(Int(volume * 100))%")
+                                .monospacedDigit()
+                                .frame(width: 44, alignment: .trailing)
+                                .foregroundStyle(OtoUI.mutedFG)
+                        }
                     }
                 case .toggleInputMute, .keepCurrent:
                     EmptyView()
                 }
 
-                Picker("Profile", selection: profileBinding) {
-                    Text("Always active").tag(Optional<UUID>.none)
-                    ForEach(state.store.profiles) { p in
-                        Text(p.name).tag(Optional(p.id))
+                FormRow(label: "Profile", isLast: true) {
+                    Picker("", selection: $profileID) {
+                        Text("Always active").tag(Optional<UUID>.none)
+                        ForEach(state.store.profiles) { p in
+                            Text(p.name).tag(Optional(p.id))
+                        }
                     }
+                    .labelsHidden()
                 }
             }
-            .formStyle(.grouped)
 
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(OtoUI.secondaryFG)
                 Button(existing == nil ? "Add" : "Save") {
                     if let rule = buildRule() {
                         if existing == nil {
@@ -458,42 +366,47 @@ private struct RuleEditorSheet: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
+                .tint(.otoTeal)
                 .disabled(!isValid)
             }
         }
-        .padding(24)
+        .padding(26)
         .frame(width: 520)
+        .materialPanel()
+        .preferredColorScheme(.light)
         .onAppear(perform: hydrate)
     }
 
     @ViewBuilder
     private var inputPicker: some View {
-        Picker("Input", selection: $inputDeviceUID) {
-            Text("Select input").tag("")
-            ForEach(state.inputDevices, id: \.uid) { d in
-                Text(d.name).tag(d.uid)
+        FormRow(label: "Input") {
+            Picker("", selection: $inputDeviceUID) {
+                Text("Select input").tag("")
+                ForEach(state.inputDevices, id: \.uid) { d in
+                    Text(d.name).tag(d.uid)
+                }
             }
-        }
-        .onChange(of: inputDeviceUID) { _, newValue in
-            inputDeviceName = state.inputDevices.first(where: { $0.uid == newValue })?.name ?? inputDeviceName
+            .labelsHidden()
+            .onChange(of: inputDeviceUID) { _, newValue in
+                inputDeviceName = state.inputDevices.first(where: { $0.uid == newValue })?.name ?? inputDeviceName
+            }
         }
     }
 
     @ViewBuilder
     private var outputPicker: some View {
-        Picker("Output", selection: $outputDeviceUID) {
-            Text("Select output").tag("")
-            ForEach(state.monitor.allDevices.filter(\.hasOutput), id: \.uid) { d in
-                Text(d.name).tag(d.uid)
+        FormRow(label: "Output") {
+            Picker("", selection: $outputDeviceUID) {
+                Text("Select output").tag("")
+                ForEach(state.monitor.allDevices.filter(\.hasOutput), id: \.uid) { d in
+                    Text(d.name).tag(d.uid)
+                }
+            }
+            .labelsHidden()
+            .onChange(of: outputDeviceUID) { _, newValue in
+                outputDeviceName = state.monitor.allDevices.first(where: { $0.uid == newValue })?.name ?? outputDeviceName
             }
         }
-        .onChange(of: outputDeviceUID) { _, newValue in
-            outputDeviceName = state.monitor.allDevices.first(where: { $0.uid == newValue })?.name ?? outputDeviceName
-        }
-    }
-
-    private var profileBinding: Binding<UUID?> {
-        Binding(get: { profileID }, set: { profileID = $0 })
     }
 
     private func hydrate() {
@@ -579,10 +492,39 @@ private struct RuleEditorSheet: View {
     }
 }
 
-// MARK: - Templates
+// MARK: - FormRow
 
-private struct TemplatesSheet: View {
-    @EnvironmentObject var state: AppState
+/// Custom row replacing `.formStyle(.grouped)` so sheets match the dark
+/// material aesthetic. Label flush left, control flush right.
+struct FormRow<Content: View>: View {
+    let label: String
+    var isLast: Bool = false
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 12) {
+                Text(label)
+                    .font(.system(size: 13))
+                    .foregroundStyle(OtoUI.mutedFG)
+                    .frame(width: 88, alignment: .leading)
+                content
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.vertical, 10)
+            if !isLast {
+                Rectangle()
+                    .fill(OtoUI.dividerColor)
+                    .frame(height: 1)
+            }
+        }
+    }
+}
+
+// MARK: - TemplatesSheet
+
+struct TemplatesSheet: View {
+    @Environment(AppState.self) private var state
     @Environment(\.dismiss) private var dismiss
 
     @State private var selected: Set<UUID> = []
@@ -593,13 +535,17 @@ private struct TemplatesSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Rule Templates").font(.title2).bold()
-            Text("Suggestions based on your connected devices. Pick the ones you want.")
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Rule templates")
+                    .font(.system(size: OtoUI.titleSize, weight: .semibold))
+                Text("Suggestions based on your connected devices.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(OtoUI.mutedFG)
+            }
 
             if templates.isEmpty {
                 Text("No suggestions available. Connect some audio devices first.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(OtoUI.mutedFG)
                     .padding(.vertical, 24)
                     .frame(maxWidth: .infinity)
             } else {
@@ -616,6 +562,8 @@ private struct TemplatesSheet: View {
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(OtoUI.secondaryFG)
                 Button("Add Selected") {
                     for t in templates where selected.contains(t.id) {
                         for r in t.rules { state.store.add(r) }
@@ -624,11 +572,14 @@ private struct TemplatesSheet: View {
                 }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
+                .tint(.otoTeal)
                 .disabled(selected.isEmpty)
             }
         }
-        .padding(24)
+        .padding(26)
         .frame(width: 560)
+        .materialPanel()
+        .preferredColorScheme(.light)
     }
 
     private func templateRow(_ t: RuleTemplates.Suggestion) -> some View {
@@ -638,15 +589,22 @@ private struct TemplatesSheet: View {
         } label: {
             HStack(spacing: 12) {
                 OtoIcon(name: isOn ? "circle-check" : "circle", size: 18)
-                    .foregroundStyle(isOn ? Color.accentColor : Color.secondary)
+                    .foregroundStyle(isOn ? Color.otoTeal : OtoUI.mutedFG)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(t.title).font(.callout.weight(.medium))
-                    Text(t.subtitle).font(.caption).foregroundStyle(.secondary)
+                    Text(t.title)
+                        .font(.system(size: 14, weight: .medium))
+                    Text(t.subtitle)
+                        .font(.system(size: 12))
+                        .foregroundStyle(OtoUI.mutedFG)
                 }
                 Spacer()
             }
             .padding(12)
-            .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+            .background(OtoUI.rowIdle, in: RoundedRectangle(cornerRadius: OtoUI.chipRadius))
+            .overlay {
+                RoundedRectangle(cornerRadius: OtoUI.chipRadius)
+                    .strokeBorder(isOn ? Color.otoTeal.opacity(0.4) : OtoUI.strokeColor.opacity(0.5), lineWidth: 1)
+            }
         }
         .buttonStyle(.plain)
     }

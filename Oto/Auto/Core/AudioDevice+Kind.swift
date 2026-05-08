@@ -75,7 +75,7 @@ extension AudioDevice {
         )
         var value: UInt32 = 0
         var size = UInt32(MemoryLayout<UInt32>.size)
-        let status = AudioObjectGetPropertyData(id, &address, 0, nil, &size, &value)
+        let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &value)
         return status == noErr ? value : 0
     }
 }

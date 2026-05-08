@@ -44,7 +44,7 @@ struct AudioDeviceSwitcher {
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-        var deviceID = device.id
+        var deviceID = device.deviceID
         let status = AudioObjectSetPropertyData(
             AudioObjectID(kAudioObjectSystemObject),
             &address,

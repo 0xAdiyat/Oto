@@ -1,12 +1,14 @@
 import Foundation
 import Combine
+import Observation
 
+@Observable
 @MainActor
-final class RuleStore: ObservableObject {
-    @Published private(set) var rules: [Rule] = []
-    @Published private(set) var fireHistory: [RuleFireEvent] = []
-    @Published private(set) var profiles: [Profile] = []
-    @Published var activeProfileID: UUID? = nil { didSet { saveProfiles() } }
+final class RuleStore {
+    private(set) var rules: [Rule] = []
+    private(set) var fireHistory: [RuleFireEvent] = []
+    private(set) var profiles: [Profile] = []
+    var activeProfileID: UUID? = nil { didSet { saveProfiles() } }
 
     /// Bump this when changing the Rule schema. Old data is migrated
     /// in `migrateIfNeeded(from:)`.
