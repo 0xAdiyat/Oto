@@ -63,14 +63,17 @@ struct MainWindowView: View {
             .padding(.bottom, 56)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .focusEffectDisabled()
+        .suppressAppKitFocusRings()
         .onAppear { runRevealAnimation() }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+        // Re-run the reveal exactly when the window is brought back on screen
+        // (orderOut → makeKeyAndOrderFront). Tying this to anything broader —
+        // NSApp.didBecomeActive, didResignActive — caused the panel to vanish
+        // on transient focus changes (e.g. clicking a filter tab triggered a
+        // brief app deactivation in the borderless window, which wiped the
+        // entrance state without a follow-up activate to restore it).
+        .onReceive(NotificationCenter.default.publisher(for: .spotlightWindowDidPresent)) { _ in
             runRevealAnimation()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
-            headerAppeared = false
-            filtersAppeared = false
-            panelAppeared = false
         }
         .sheet(item: $sheet) { which in
             switch which {
@@ -126,6 +129,17 @@ enum RuleFilter: String, CaseIterable, Identifiable {
     case all, active, inactive
     var id: String { rawValue }
     var label: String { rawValue.capitalized }
+
+    /// Each tab gets its own brand color when selected so the active filter
+    /// is identifiable at a glance — teal for the catch-all view, yellow for
+    /// "live" rules, alert-red for disabled ones.
+    var tint: Color {
+        switch self {
+        case .all:      return .otoTeal
+        case .active:   return .otoYellow
+        case .inactive: return .otoAlert
+        }
+    }
 }
 
 struct FilterTabsBar: View {
@@ -136,6 +150,7 @@ struct FilterTabsBar: View {
         HStack(spacing: 6) {
             ForEach(RuleFilter.allCases) { f in
                 let isOn = filter == f
+                let tint = f.tint
                 Button {
                     filter = f
                 } label: {
@@ -146,16 +161,16 @@ struct FilterTabsBar: View {
                             .font(.system(size: 11))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 1)
-                            .background(OtoUI.rowIdle, in: Capsule())
+                            .background(isOn ? tint.opacity(0.18) : OtoUI.rowIdle, in: Capsule())
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(isOn ? Color.otoTeal.opacity(0.18) : Color.clear, in: Capsule())
+                    .background(isOn ? tint.opacity(0.18) : Color.clear, in: Capsule())
                     .overlay {
                         Capsule()
-                            .strokeBorder(isOn ? Color.otoTeal.opacity(0.45) : OtoUI.dividerColor, lineWidth: 1)
+                            .strokeBorder(isOn ? tint.opacity(0.45) : OtoUI.dividerColor, lineWidth: 1)
                     }
-                    .foregroundStyle(isOn ? Color.otoTeal : OtoUI.secondaryFG)
+                    .foregroundStyle(isOn ? tint : OtoUI.secondaryFG)
                 }
                 .buttonStyle(.plain)
             }

@@ -41,7 +41,8 @@ struct DevicesSheet: View {
         .padding(26)
         .frame(width: 600)
         .materialPanel()
-        .preferredColorScheme(.light)
+        .focusEffectDisabled()
+        .suppressAppKitFocusRings()
     }
 
     private func section(title: String, count: Int, devices: [AudioDevice], isInput: Bool) -> some View {
@@ -73,11 +74,16 @@ struct DevicesSheet: View {
 
     private func deviceRow(_ device: AudioDevice, isInput: Bool) -> some View {
         let isCurrentInput = isInput && device.uid == state.monitor.defaultInputDevice?.uid
+        let tint = device.displayTint
         return HStack(spacing: 12) {
             OtoIcon(name: device.kind.systemImage, size: 18)
                 .frame(width: 40, height: 40)
-                .background(OtoUI.iconTile, in: RoundedRectangle(cornerRadius: OtoUI.chipRadius))
-                .foregroundStyle(.primary.opacity(0.85))
+                .background(tint.opacity(0.16), in: RoundedRectangle(cornerRadius: OtoUI.chipRadius))
+                .overlay {
+                    RoundedRectangle(cornerRadius: OtoUI.chipRadius)
+                        .strokeBorder(tint.opacity(0.32), lineWidth: 1)
+                }
+                .foregroundStyle(tint)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(device.name)
@@ -153,7 +159,7 @@ struct SettingsSheet: View {
 
                         if notificationStatus == .denied && showNotifications {
                             HStack(spacing: 8) {
-                                OtoIcon(name: "triangle-alert", size: 13)
+                                OtoIcon(name: "exclamationmark.triangle", size: 13)
                                     .foregroundStyle(Color.otoYellow)
                                 Text("Notifications are disabled in System Settings.")
                                     .font(.system(size: 11))
@@ -182,7 +188,8 @@ struct SettingsSheet: View {
         .padding(26)
         .frame(width: 480)
         .materialPanel()
-        .preferredColorScheme(.light)
+        .focusEffectDisabled()
+        .suppressAppKitFocusRings()
         .onAppear {
             launchAtLogin = LaunchAtLogin.isEnabled
             Task { notificationStatus = await NotificationService.shared.authorizationStatus() }
@@ -197,7 +204,7 @@ struct AboutSheet: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            Image("MenuBarIcon")
+            Image("LogoMark")
                 .resizable()
                 .scaledToFit()
                 .frame(height: 80)
@@ -230,6 +237,7 @@ struct AboutSheet: View {
         .padding(28)
         .frame(width: 420, height: 360)
         .materialPanel()
-        .preferredColorScheme(.light)
+        .focusEffectDisabled()
+        .suppressAppKitFocusRings()
     }
 }

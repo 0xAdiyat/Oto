@@ -7,10 +7,10 @@ enum AudioDeviceKind {
 
     var systemImage: String {
         switch self {
-        case .builtIn: return "laptop"
+        case .builtIn: return "laptopcomputer"
         case .usb: return "mic"
-        case .bluetooth: return "bluetooth"
-        case .airPods: return "ear"
+        case .bluetooth: return "wave.3.right"
+        case .airPods: return "airpods"
         case .headphones: return "headphones"
         case .other: return "mic"
         }
@@ -27,14 +27,18 @@ enum AudioDeviceKind {
         }
     }
 
+    /// Per-kind tint drawn from the Oto logo palette. Spread across all 5
+    /// brand colors so a glance at the rules list shows device variety
+    /// (built-in vs USB vs Bluetooth vs AirPods vs over-ear) rather than a
+    /// wall of teal.
     var tint: Color {
         switch self {
-        case .builtIn: return .otoYellow
-        case .usb: return .otoTeal
-        case .bluetooth: return .otoTeal
-        case .airPods: return .otoNavy
-        case .headphones: return .otoTeal
-        case .other: return .otoTeal
+        case .builtIn:    return .otoYellow   // warm — laptop mascot ear-tip
+        case .usb:        return .otoTeal     // primary brand
+        case .bluetooth:  return .otoNavy     // cool — wireless distance
+        case .airPods:    return .otoSage     // light blue-green, distinct
+        case .headphones: return .otoNavy     // cool — over-ear cans
+        case .other:      return .otoTeal
         }
     }
 }

@@ -9,7 +9,7 @@ struct RulesPanel: View {
     let filter: RuleFilter
     let onEdit: (Rule) -> Void
 
-    private let rowHeight: CGFloat = 78
+    private let rowHeight: CGFloat = OtoUI.rowHeight
     private let panelInsets: CGFloat = 10
     private let visibleRowLimit = 5
 
@@ -64,7 +64,7 @@ struct RulesPanel: View {
 
     private var emptyState: some View {
         VStack(spacing: 14) {
-            OtoIcon(name: "list-checks", size: 36)
+            OtoIcon(name: "checklist", size: 36)
                 .foregroundStyle(OtoUI.mutedFG)
             Text("No rules yet")
                 .font(.system(size: 17, weight: .semibold))
@@ -119,6 +119,48 @@ struct RuleRow: View {
         }
     }
 
+    /// Color the icon tile takes — derived from the trigger device, with
+    /// per-trigger fallbacks for the deviceless triggers.
+    private var triggerTint: Color {
+        switch rule.trigger {
+        case .deviceConnects(let uid, let name),
+             .deviceDisconnects(let uid, let name):
+            if let d = state.monitor.allDevices.first(where: { $0.uid == uid }) {
+                return d.displayTint
+            }
+            // Device not present right now — fall back on the name heuristic
+            // so the row still gets a sensible color.
+            let lower = name.lowercased()
+            if lower.contains("yeti")     { return .otoAlert }
+            if lower.contains("airpods")  { return .otoSage }
+            if lower.contains("wh-") || lower.contains("headphone") { return .otoNavy }
+            if lower.contains("fifine")   { return .otoTeal }
+            return .otoTeal
+        case .anyBluetoothConnects: return .otoNavy
+        case .systemWakes:          return .otoYellow
+        }
+    }
+
+    /// Color the highlighted action-target text takes — uses the action's
+    /// destination device if any, otherwise teal.
+    private var actionTint: Color {
+        switch rule.action {
+        case .setInput(let uid, let name),
+             .setOutput(let uid, let name),
+             .setBoth(let uid, let name, _, _):
+            if let d = state.monitor.allDevices.first(where: { $0.uid == uid }) {
+                return d.displayTint
+            }
+            let lower = name.lowercased()
+            if lower.contains("yeti")     { return .otoAlert }
+            if lower.contains("airpods")  { return .otoSage }
+            if lower.contains("macbook") || lower.contains("built-in") { return .otoYellow }
+            if lower.contains("fifine")   { return .otoTeal }
+            return .otoTeal
+        default: return .otoTeal
+        }
+    }
+
     var body: some View {
         HStack(spacing: 14) {
             triggerTile
@@ -129,14 +171,14 @@ struct RuleRow: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 HStack(spacing: 4) {
-                    OtoIcon(name: "arrow-right", size: 10)
+                    OtoIcon(name: "arrow.right", size: 10)
                         .foregroundStyle(OtoUI.mutedFG)
                     if !rule.action.prefixText.isEmpty {
                         Text(rule.action.prefixText)
                             .foregroundStyle(OtoUI.mutedFG)
                     }
                     Text(actionDisplayText)
-                        .foregroundStyle(rule.enabled ? Color.otoTeal : OtoUI.mutedFG)
+                        .foregroundStyle(rule.enabled ? actionTint : OtoUI.mutedFG)
                         .fontWeight(.medium)
                     if case .keepCurrent = rule.action {
                         Text("(do nothing)").foregroundStyle(OtoUI.mutedFG)
@@ -158,8 +200,9 @@ struct RuleRow: View {
                 .controlSize(.small)
                 .tint(.otoTeal)
 
-                IconButton(icon: "settings", iconSize: 13, help: "Edit", action: onEdit)
-
+                // Combined "more" menu — Edit lives here so the standalone
+                // gear button is gone (cleaner row, less visual noise).
+                // Hidden until the row is hovered.
                 IconButton(
                     icon: "ellipsis",
                     iconSize: 13,
@@ -167,7 +210,6 @@ struct RuleRow: View {
                     action: {}
                 )
                 .overlay {
-                    // Use a Menu underneath to give the icon button a real menu.
                     Menu {
                         Button("Edit", action: onEdit)
                         Button("Duplicate") { state.store.duplicate(rule) }
@@ -180,11 +222,12 @@ struct RuleRow: View {
                     .menuStyle(.borderlessButton)
                     .menuIndicator(.hidden)
                 }
+                .opacity(isHovering ? 1 : 0)
+                .allowsHitTesting(isHovering)
             }
-            .opacity(isHovering ? 1 : 0.72)
         }
         .padding(.horizontal, 10)
-        .frame(height: 70)
+        .frame(height: OtoUI.rowHeight)
         .background {
             RoundedRectangle(cornerRadius: OtoUI.cardRadius, style: .continuous)
                 .fill(isHovering ? OtoUI.rowSelected : Color.clear)
@@ -197,14 +240,15 @@ struct RuleRow: View {
 
     private var triggerTile: some View {
         let info = triggerIconInfo
+        let tint = triggerTint
         return OtoIcon(name: info.icon, size: 20)
             .frame(width: OtoUI.triggerTileSize, height: OtoUI.triggerTileSize)
-            .background(OtoUI.iconTile, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(tint.opacity(0.16), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(OtoUI.strokeColor.opacity(0.6), lineWidth: 1)
+                    .strokeBorder(tint.opacity(0.32), lineWidth: 1)
             }
-            .foregroundStyle(.primary.opacity(0.85))
+            .foregroundStyle(tint)
             .accessibilityHidden(true)
             .help(info.label)
     }
@@ -216,7 +260,7 @@ struct RuleRow: View {
         case .deviceDisconnects(let uid, let name):
             return tileFor(uid: uid, name: name, label: "Disconnect")
         case .anyBluetoothConnects:
-            return ("bluetooth", "Bluetooth connects")
+            return ("wave.3.right", "Bluetooth connects")
         case .systemWakes:
             return ("power", "System wakes")
         }
@@ -227,7 +271,7 @@ struct RuleRow: View {
             return (device.kind.systemImage, label)
         }
         let lower = name.lowercased()
-        if lower.contains("airpods") { return ("ear", label) }
+        if lower.contains("airpods") { return ("airpods", label) }
         if lower.contains("wh-") || lower.contains("headphone") { return ("headphones", label) }
         return ("mic", label)
     }
@@ -291,7 +335,6 @@ struct RuleEditorSheet: View {
                         ForEach(TriggerKind.allCases) { k in Text(k.label).tag(k) }
                     }
                     .labelsHidden()
-                    .frame(maxWidth: .infinity, alignment: .trailing)
                 }
 
                 if triggerKind == .deviceConnects || triggerKind == .deviceDisconnects {
@@ -373,7 +416,8 @@ struct RuleEditorSheet: View {
         .padding(26)
         .frame(width: 520)
         .materialPanel()
-        .preferredColorScheme(.light)
+        .focusEffectDisabled()
+        .suppressAppKitFocusRings()
         .onAppear(perform: hydrate)
     }
 
@@ -579,16 +623,25 @@ struct TemplatesSheet: View {
         .padding(26)
         .frame(width: 560)
         .materialPanel()
-        .preferredColorScheme(.light)
+        .focusEffectDisabled()
+        .suppressAppKitFocusRings()
     }
 
     private func templateRow(_ t: RuleTemplates.Suggestion) -> some View {
         let isOn = selected.contains(t.id)
         return Button {
-            if isOn { selected.remove(t.id) } else { selected.insert(t.id) }
+            // Read selection inside the closure so the toggle always reflects
+            // the current state — capturing `isOn` at build time worked in
+            // theory but proved flaky inside ScrollView/LazyVStack where
+            // SwiftUI sometimes reused stale closures.
+            if selected.contains(t.id) {
+                selected.remove(t.id)
+            } else {
+                selected.insert(t.id)
+            }
         } label: {
             HStack(spacing: 12) {
-                OtoIcon(name: isOn ? "circle-check" : "circle", size: 18)
+                OtoIcon(name: isOn ? "checkmark.circle.fill" : "circle", size: 18)
                     .foregroundStyle(isOn ? Color.otoTeal : OtoUI.mutedFG)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(t.title)
@@ -600,11 +653,14 @@ struct TemplatesSheet: View {
                 Spacer()
             }
             .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(OtoUI.rowIdle, in: RoundedRectangle(cornerRadius: OtoUI.chipRadius))
             .overlay {
                 RoundedRectangle(cornerRadius: OtoUI.chipRadius)
                     .strokeBorder(isOn ? Color.otoTeal.opacity(0.4) : OtoUI.strokeColor.opacity(0.5), lineWidth: 1)
             }
+            // Make the entire pill (including the spacer area) the hit target.
+            .contentShape(RoundedRectangle(cornerRadius: OtoUI.chipRadius))
         }
         .buttonStyle(.plain)
     }

@@ -1,7 +1,17 @@
 {
   "images" : [
     {
-      "filename" : "logo-wordmark.svg",
+      "filename" : "logo-wordmark-dark.svg",
+      "idiom" : "universal"
+    },
+    {
+      "appearances" : [
+        {
+          "appearance" : "luminosity",
+          "value" : "dark"
+        }
+      ],
+      "filename" : "logo-wordmark-white.svg",
       "idiom" : "universal"
     }
   ],

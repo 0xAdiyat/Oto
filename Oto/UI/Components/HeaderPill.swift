@@ -21,13 +21,8 @@ struct HeaderPill: View {
                 .scaledToFit()
                 .frame(height: 26)
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text("Rules")
-                    .font(.system(size: 17, weight: .semibold))
-                Text("\(state.store.rules.filter(\.enabled).count) of \(state.store.rules.count) active")
-                    .font(.system(size: 11))
-                    .foregroundStyle(OtoUI.mutedFG)
-            }
+            Text("Rules")
+                .font(.system(size: 17, weight: .semibold))
 
             Spacer()
 
@@ -45,7 +40,7 @@ struct HeaderPill: View {
 
             HStack(spacing: 4) {
                 HeaderIconButton(icon: "plus", help: "Add rule", action: onAdd)
-                HeaderIconButton(icon: "wand-sparkles", help: "Templates", action: onTemplates)
+                HeaderIconButton(icon: "wand.and.stars", help: "Templates", action: onTemplates)
                 HeaderIconButton(icon: "ellipsis", help: "More", action: showOverflowMenu)
             }
             .opacity(isHovering ? 1 : 0.55)
@@ -91,10 +86,10 @@ struct HeaderPill: View {
         } label: {
             HStack(spacing: 6) {
                 let active = state.store.profiles.first(where: { $0.id == state.store.activeProfileID })
-                OtoIcon(name: active?.icon ?? "grid-2x2", size: 12)
+                OtoIcon(name: active?.icon ?? "square.grid.2x2", size: 12)
                 Text(active?.name ?? "All")
                     .font(.system(size: 12, weight: .medium))
-                OtoIcon(name: "chevron-down", size: 9)
+                OtoIcon(name: "chevron.down", size: 9)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -104,6 +99,7 @@ struct HeaderPill: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .fixedSize()
+        .focusEffectDisabled()
     }
 
     private func showOverflowMenu() {

@@ -1,24 +1,53 @@
 import SwiftUI
+import AppKit
 
-/// Brand palette derived from the Oto logo.
-///   Navy   #162C47 — primary dark (legacy)
-///   Teal   #0F9D8E — primary accent (also AccentColor)
-///   Yellow #FBC02D — secondary accent (legacy)
-///   Cream  #F9F5EF — light surface (legacy)
-///   Sage   #B2D5D1 — subtle accent (legacy)
+/// Brand palette derived from the Oto logo. Each color is **adaptive** — the
+/// authentic logo value is used in light mode, and a brightness-shifted
+/// counterpart is used in dark mode so contrast stays legible. Consumers
+/// always reference the same constant (e.g. `Color.otoNavy`); SwiftUI / AppKit
+/// resolve the actual RGB at draw-time based on the effective `NSAppearance`.
 ///
-/// Post-overhaul Oto uses a Spotlight-style aesthetic: dark mode, neutral
-/// surfaces over `.ultraThinMaterial`, teal accent only.
+///                Light-mode hex   Dark-mode hex   Role
+///   Navy         #162C47          #6F92C9         Bluetooth, headphones
+///   Teal         #0F9D8E          #2DBFAE         Primary accent / USB
+///   Yellow       #D49E1A          #FBC02D         Built-in mic, system wake
+///   Cream        #F9F5EF          #2A2826         Warm surface
+///   Sage         #5B9994          #B2D5D1         AirPods / soft accent
+///   Alert        #D94D4D          #E86A6A         Warnings (Yeti, errors)
 extension Color {
-    static let otoNavy   = Color(red: 0.086, green: 0.173, blue: 0.278)
-    static let otoTeal   = Color(red: 0.059, green: 0.616, blue: 0.557)
-    static let otoYellow = Color(red: 0.984, green: 0.753, blue: 0.176)
-    static let otoCream  = Color(red: 0.976, green: 0.961, blue: 0.937)
-    static let otoSage   = Color(red: 0.698, green: 0.835, blue: 0.820)
+    static let otoNavy   = adaptive(
+        light: NSColor(srgbRed: 0.086, green: 0.173, blue: 0.278, alpha: 1),
+        dark:  NSColor(srgbRed: 0.435, green: 0.573, blue: 0.788, alpha: 1)
+    )
+    static let otoTeal   = adaptive(
+        light: NSColor(srgbRed: 0.059, green: 0.616, blue: 0.557, alpha: 1),
+        dark:  NSColor(srgbRed: 0.176, green: 0.749, blue: 0.682, alpha: 1)
+    )
+    static let otoYellow = adaptive(
+        light: NSColor(srgbRed: 0.831, green: 0.620, blue: 0.102, alpha: 1),
+        dark:  NSColor(srgbRed: 0.984, green: 0.753, blue: 0.176, alpha: 1)
+    )
+    static let otoCream  = adaptive(
+        light: NSColor(srgbRed: 0.976, green: 0.961, blue: 0.937, alpha: 1),
+        dark:  NSColor(srgbRed: 0.165, green: 0.157, blue: 0.149, alpha: 1)
+    )
+    static let otoSage   = adaptive(
+        light: NSColor(srgbRed: 0.357, green: 0.600, blue: 0.580, alpha: 1),
+        dark:  NSColor(srgbRed: 0.698, green: 0.835, blue: 0.820, alpha: 1)
+    )
+    static let otoAlert  = adaptive(
+        light: NSColor(srgbRed: 0.733, green: 0.247, blue: 0.247, alpha: 1),
+        dark:  NSColor(srgbRed: 0.910, green: 0.416, blue: 0.416, alpha: 1)
+    )
 
-    /// Subtle red used for warning/disconnect emphasis (kept outside the
-    /// brand palette so accidents stand out).
-    static let otoAlert  = Color(red: 0.85, green: 0.30, blue: 0.30)
+    /// Build a Color whose underlying NSColor resolves per-appearance. In dark
+    /// mode (`darkAqua` / `vibrantDark`) returns `dark`; otherwise `light`.
+    private static func adaptive(light: NSColor, dark: NSColor) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.darkAqua, .vibrantDark, .accessibilityHighContrastDarkAqua, .accessibilityHighContrastVibrantDark]) != nil
+            return isDark ? dark : light
+        })
+    }
 }
 
 /// Spotlight design tokens. Values mirror media-downloader's window/card/row
@@ -35,29 +64,32 @@ enum OtoUI {
     static let chipRadius: CGFloat        = 10
     static let buttonRadius: CGFloat      = 8
 
-    // Borders — black-on-light gives a softer hairline that reads cleanly
-    // over `.ultraThinMaterial` in light mode (white-on-dark would also work
-    // for dark mode; we force light here).
-    static let strokeColor                 = Color.black.opacity(0.10)
-    static let dividerColor                = Color.black.opacity(0.07)
+    // Borders — `Color.primary` is white in dark mode and black in light mode,
+    // so a low-opacity primary stroke reads as a subtle hairline in either
+    // theme. Opacities are tuned slightly higher than a pure dark-mode value so
+    // light-mode panels still have visible edges against light desktops.
+    static let strokeColor                 = Color.primary.opacity(0.16)
+    static let dividerColor                = Color.primary.opacity(0.11)
     static let strokeWidth: CGFloat        = 1
 
-    // Shadows — slightly softer than the dark-mode variant so the panel
-    // doesn't punch a heavy hole in the light wallpaper behind it.
-    static let shadowStrong                = Color.black.opacity(0.16)
-    static let shadowMedium                = Color.black.opacity(0.10)
+    // Shadows are always a dark drop, regardless of theme. Slightly heavier
+    // than typical so the floating panel separates from light wallpapers too.
+    static let shadowStrong                = Color.black.opacity(0.28)
+    static let shadowMedium                = Color.black.opacity(0.18)
     static let shadowStrongRadius: CGFloat = 28
     static let shadowMediumRadius: CGFloat = 24
     static let shadowStrongY: CGFloat      = 18
     static let shadowMediumY: CGFloat      = 14
 
-    // Surface tints (over .ultraThinMaterial)
-    static let rowIdle                     = Color.primary.opacity(0.04)
-    static let rowHover                    = Color.primary.opacity(0.095)
-    static let rowSelected                 = Color.primary.opacity(0.055)
-    static let iconTile                    = Color.primary.opacity(0.06)
-    static let mutedFG                     = Color.primary.opacity(0.58)
-    static let secondaryFG                 = Color.primary.opacity(0.72)
+    // Surface tints (over .ultraThinMaterial). Bumped enough that rows are
+    // distinguishable in both schemes — black-at-low-opacity is much less
+    // visible against ultraThinMaterial than white-at-the-same-opacity.
+    static let rowIdle                     = Color.primary.opacity(0.06)
+    static let rowHover                    = Color.primary.opacity(0.12)
+    static let rowSelected                 = Color.primary.opacity(0.08)
+    static let iconTile                    = Color.primary.opacity(0.09)
+    static let mutedFG                     = Color.primary.opacity(0.62)
+    static let secondaryFG                 = Color.primary.opacity(0.78)
 
     // Type scale
     static let titleSize: CGFloat          = 22
@@ -100,6 +132,15 @@ extension View {
             )
     }
 
+    /// SwiftUI's `.focusEffectDisabled()` does not propagate to AppKit-bridged
+    /// controls on macOS — `Picker(.menu)` uses NSPopUpButton, which draws its
+    /// own accent-tinted focus ring whenever it's first responder. Apply this
+    /// at the root of any sheet/panel that contains pickers/menus to walk the
+    /// hosted AppKit tree and force `focusRingType = .none` on every NSControl.
+    func suppressAppKitFocusRings() -> some View {
+        self.background(FocusRingSuppressor())
+    }
+
     /// Capsule variant of `materialPanel` — used for the header pill.
     func materialCapsule() -> some View {
         self
@@ -114,5 +155,39 @@ extension View {
                 x: 0,
                 y: OtoUI.shadowStrongY
             )
+    }
+}
+
+// MARK: - AppKit focus-ring suppression
+
+/// Invisible NSViewRepresentable that, once mounted into a SwiftUI hierarchy,
+/// walks the host window's content view and disables the AppKit focus ring on
+/// every NSControl it finds. Re-runs on each SwiftUI update because SwiftUI
+/// often rebuilds bridged controls (e.g. when a Picker's selection changes).
+private struct FocusRingSuppressor: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let v = NSView(frame: .zero)
+        scheduleSweep(from: v)
+        return v
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        scheduleSweep(from: nsView)
+    }
+
+    private func scheduleSweep(from anchor: NSView) {
+        // Defer to next runloop tick so SwiftUI has finished laying out
+        // bridged controls before we walk them.
+        DispatchQueue.main.async {
+            guard let root = anchor.window?.contentView else { return }
+            disableRings(in: root)
+        }
+    }
+
+    private func disableRings(in view: NSView) {
+        if let control = view as? NSControl {
+            control.focusRingType = .none
+        }
+        for sub in view.subviews { disableRings(in: sub) }
     }
 }

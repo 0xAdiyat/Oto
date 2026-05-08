@@ -3,7 +3,13 @@ import SwiftUI
 
 struct MenuBarView: View {
     @Environment(AppState.self) private var state
+    @Environment(\.dismiss) private var dismiss
     let openMain: () -> Void
+
+    private func openMainAndDismiss() {
+        dismiss()
+        openMain()
+    }
 
     var body: some View {
         VStack(spacing: 10) {
@@ -25,6 +31,7 @@ struct MenuBarView: View {
         }
         .padding(14)
         .frame(width: 340)
+        .focusEffectDisabled()
     }
 
     private var divider: some View {
@@ -49,8 +56,8 @@ struct MenuBarView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(OtoUI.secondaryFG)
             }
-            IconButton(icon: "settings", iconSize: 14, help: "Open Oto") {
-                openMain()
+            IconButton(icon: "gearshape", iconSize: 14, help: "Open Oto") {
+                openMainAndDismiss()
             }
         }
     }
@@ -80,7 +87,7 @@ struct MenuBarView: View {
                 HStack(spacing: 4) {
                     Text(active?.name ?? "All")
                         .font(.system(size: 11, weight: .medium))
-                    OtoIcon(name: "chevron-down", size: 9)
+                    OtoIcon(name: "chevron.down", size: 9)
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -156,7 +163,7 @@ struct MenuBarView: View {
 
     private var footer: some View {
         VStack(spacing: 2) {
-            footerButton(icon: "square-arrow-out-up-right", title: "Open Oto", trailing: nil, action: openMain)
+            footerButton(icon: "arrow.up.right.square", title: "Open Oto", trailing: nil, action: openMainAndDismiss)
             footerButton(icon: "power", title: "Quit Oto", trailing: "⌘Q") {
                 NSApplication.shared.terminate(nil)
             }
@@ -209,11 +216,16 @@ private struct DeviceRow<Trailing: View>: View {
     @ViewBuilder let trailing: Trailing
 
     var body: some View {
-        HStack(spacing: 10) {
+        let tint = device.displayTint
+        return HStack(spacing: 10) {
             OtoIcon(name: device.kind.systemImage, size: 16)
                 .frame(width: 32, height: 32)
-                .background(OtoUI.iconTile, in: RoundedRectangle(cornerRadius: 8))
-                .foregroundStyle(.primary.opacity(0.85))
+                .background(tint.opacity(0.16), in: RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(tint.opacity(0.32), lineWidth: 1)
+                }
+                .foregroundStyle(tint)
             VStack(alignment: .leading, spacing: 2) {
                 Text(device.name)
                     .font(.system(size: 13, weight: .medium))

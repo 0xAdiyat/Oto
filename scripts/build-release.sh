@@ -39,11 +39,26 @@ codesign --force --deep --sign - "$DIST_DIR/Oto.app"
 echo "→ Zipping with ditto (preserves resource forks + signature)..."
 ( cd "$DIST_DIR" && ditto -c -k --keepParent Oto.app Oto.zip )
 
+echo "→ Building drag-and-drop DMG..."
+DMG_STAGING="$DIST_DIR/dmg-staging"
+rm -rf "$DMG_STAGING"
+mkdir -p "$DMG_STAGING"
+cp -R "$DIST_DIR/Oto.app" "$DMG_STAGING/Oto.app"
+ln -s /Applications "$DMG_STAGING/Applications"
+hdiutil create \
+  -volname "Oto" \
+  -srcfolder "$DMG_STAGING" \
+  -ov \
+  -format UDZO \
+  "$DIST_DIR/Oto.dmg"
+rm -rf "$DMG_STAGING"
+
 echo
 echo "✓ Done."
-echo "  App:  $DIST_DIR/Oto.app"
-echo "  Zip:  $DIST_DIR/Oto.zip"
+echo "  App: $DIST_DIR/Oto.app"
+echo "  Zip: $DIST_DIR/Oto.zip"
+echo "  DMG: $DIST_DIR/Oto.dmg"
 echo
-echo "To install: drag dist/Oto.app to /Applications."
-echo "To share:   send dist/Oto.zip. Recipient unzips, drags to /Applications,"
+echo "To install: open dist/Oto.dmg → drag Oto to Applications."
+echo "To share:   send dist/Oto.dmg. Recipient double-clicks, drags to Applications,"
 echo "            and on first launch right-clicks → Open (one-time Gatekeeper bypass)."
