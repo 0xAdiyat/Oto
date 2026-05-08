@@ -4,7 +4,7 @@
 <br>
 <p align="center">
   <a href="https://github.com/0xAdiyat/Oto/releases/">
-    <img src="https://raw.githubusercontent.com/0xAdiyat/Oto/main/Oto/Assets.xcassets/LogoMark.imageset/logo-oto-dark.svg" alt="Oto Logo" width="120" height="120">
+    <img src="https://raw.githubusercontent.com/0xAdiyat/Oto/main/Oto/Assets.xcassets/AppIcon.appiconset/icon-1024.png" alt="Oto Logo" width="120" height="120">
   </a>
 </p>
 
