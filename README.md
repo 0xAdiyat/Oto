@@ -3,9 +3,7 @@
 <h1 align="center">Oto</h1>
 <br>
 <p align="center">
-  <a href="https://github.com/0xAdiyat/Oto/releases/">
-    <img src="https://raw.githubusercontent.com/0xAdiyat/Oto/main/Oto/Assets.xcassets/AppIcon.appiconset/icon-1024.png" alt="Oto Logo" width="120" height="120">
-  </a>
+  <img src="https://github.com/0xAdiyat/Oto/blob/main/Oto/Assets.xcassets/LogoFull.imageset/logo-full-oto-dark.svg?raw=true" alt="Oto Logo" width="300">
 </p>
 
 <p align="center">
