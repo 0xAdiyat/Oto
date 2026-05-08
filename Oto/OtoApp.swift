@@ -21,6 +21,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         SpotlightWindowController.shared.install(
             rootView: MainWindowView().environment(state)
         )
+
+        // First-run welcome: auto-present the main window the very first time
+        // Oto launches so users discover it isn't trapped in the menu bar.
+        // Persisted in UserDefaults — uninstalling/reinstalling clears the
+        // flag, so a fresh install retriggers the welcome.
+        let firstRunKey = "Oto.hasShownFirstRunWindow"
+        if !UserDefaults.standard.bool(forKey: firstRunKey) {
+            UserDefaults.standard.set(true, forKey: firstRunKey)
+            SpotlightWindowController.shared.present(activate: true)
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
