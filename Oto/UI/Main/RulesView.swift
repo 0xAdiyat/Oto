@@ -33,10 +33,10 @@ struct RulesPanel: View {
 
     var body: some View {
         Group {
-            if state.store.rules.isEmpty {
+            if state.store.rules.isEmpty || filteredRules.isEmpty {
                 emptyState
                     .frame(width: OtoUI.pillWidth)
-                    .frame(minHeight: 320)
+                    .frame(minHeight: state.store.rules.isEmpty ? 320 : 188)
                     .materialPanel(strongShadow: false)
             } else {
                 rulesList
@@ -77,23 +77,100 @@ struct RulesPanel: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 14) {
-            OtoIcon(name: "checklist", size: 36)
-                .foregroundStyle(OtoUI.mutedFG)
-            Text("No rules yet")
-                .font(.system(size: 17, weight: .semibold))
-            Text("Add a rule and Oto will switch your input automatically when devices connect, disconnect, or your Mac wakes.")
-                .font(.system(size: 13))
-                .foregroundStyle(OtoUI.mutedFG)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 440)
-            Text("Use the + button in the header to add one.")
-                .font(.system(size: 12))
-                .foregroundStyle(OtoUI.mutedFG)
-                .padding(.top, 4)
+        VStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .fill(emptyStateTint.opacity(0.16))
+                    .frame(width: 58, height: 58)
+                    .blur(radius: 8)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 54, height: 54)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .strokeBorder(emptyStateTint.opacity(0.36), lineWidth: 1)
+                    }
+                OtoIcon(name: emptyStateIcon, size: 24, weight: .medium)
+                    .foregroundStyle(emptyStateTint)
+            }
+
+            VStack(spacing: 6) {
+                Text(emptyStateTitle)
+                    .font(.system(size: 17, weight: .semibold))
+                Text(emptyStateMessage)
+                    .font(.system(size: 13))
+                    .foregroundStyle(OtoUI.mutedFG)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+                    .frame(maxWidth: 460)
+            }
+
+            if let hint = emptyStateHint {
+                Text(hint)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(emptyStateTint)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(emptyStateTint.opacity(0.12), in: Capsule())
+                    .overlay {
+                        Capsule()
+                            .strokeBorder(emptyStateTint.opacity(0.28), lineWidth: 1)
+                    }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(40)
+        .padding(.horizontal, 42)
+        .padding(.vertical, 34)
+    }
+
+    private var emptyStateTitle: String {
+        if state.store.rules.isEmpty { return "No rules yet" }
+        switch filter {
+        case .all: return "No rules yet"
+        case .active: return "No active rules"
+        case .inactive: return "No inactive rules"
+        }
+    }
+
+    private var emptyStateMessage: String {
+        if state.store.rules.isEmpty {
+            return "Add a rule and Oto will switch your audio automatically when devices connect, apps launch, or your Mac wakes."
+        }
+        switch filter {
+        case .all:
+            return "Add a rule and Oto will start routing your audio automatically."
+        case .active:
+            return "Every rule is paused. Resume rules from the Inactive tab or add a new automation."
+        case .inactive:
+            return "All rules are currently active. Disabled rules will appear here when you pause one."
+        }
+    }
+
+    private var emptyStateHint: String? {
+        if state.store.rules.isEmpty { return "Use + in the header to add one" }
+        switch filter {
+        case .all: return "Use + in the header"
+        case .active: return "Open Inactive to resume rules"
+        case .inactive: return "Pause a rule to see it here"
+        }
+    }
+
+    private var emptyStateIcon: String {
+        if state.store.rules.isEmpty { return "wand.and.stars" }
+        switch filter {
+        case .all: return "wand.and.stars"
+        case .active: return "pause.circle"
+        case .inactive: return "checkmark.circle"
+        }
+    }
+
+    private var emptyStateTint: Color {
+        if state.store.rules.isEmpty { return .otoTeal }
+        switch filter {
+        case .all: return .otoTeal
+        case .active: return .otoYellow
+        case .inactive: return .otoTeal
+        }
     }
 }
 
@@ -329,6 +406,7 @@ struct RuleEditorSheet: View {
     @State private var outputVolume: Double = 0.4
     @State private var profileID: UUID? = nil
     @State private var conditionKind: ConditionKind = .none
+    @State private var dryRunResult: RuleDryRunResult?
 
     enum TriggerKind: String, CaseIterable, Identifiable {
         case deviceConnects, deviceDisconnects, anyBluetooth, systemWakes, appLaunches
@@ -394,8 +472,14 @@ struct RuleEditorSheet: View {
             Text(existing == nil ? "New rule" : "Edit rule")
                 .font(.system(size: OtoUI.titleSize, weight: .semibold))
 
+            rulePreviewCard
+
             if let warning = conflictWarning {
                 conflictBanner(message: warning)
+            }
+
+            if let dryRunResult {
+                dryRunBanner(dryRunResult)
             }
 
             VStack(spacing: 0) {
@@ -485,6 +569,13 @@ struct RuleEditorSheet: View {
             }
 
             HStack {
+                Button("Dry Run") {
+                    performDryRun()
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(isValid ? Color.otoTeal : OtoUI.mutedFG)
+                .disabled(!isValid)
+
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .buttonStyle(.plain)
@@ -511,6 +602,36 @@ struct RuleEditorSheet: View {
         .focusEffectDisabled()
         .suppressAppKitFocusRings()
         .onAppear(perform: hydrate)
+        .onChange(of: triggerKind) { _, _ in dryRunResult = nil }
+        .onChange(of: triggerDeviceUID) { _, _ in dryRunResult = nil }
+        .onChange(of: triggerAppBundleID) { _, _ in dryRunResult = nil }
+        .onChange(of: actionKind) { _, _ in dryRunResult = nil }
+        .onChange(of: inputDeviceUID) { _, _ in dryRunResult = nil }
+        .onChange(of: outputDeviceUID) { _, _ in dryRunResult = nil }
+        .onChange(of: conditionKind) { _, _ in dryRunResult = nil }
+        .onChange(of: profileID) { _, _ in dryRunResult = nil }
+    }
+
+    private var rulePreviewCard: some View {
+        HStack(alignment: .top, spacing: 10) {
+            OtoIcon(name: "text.quote", size: 14)
+                .foregroundStyle(Color.otoTeal)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Preview")
+                    .font(.system(size: 12, weight: .semibold))
+                Text(previewText)
+                    .font(.system(size: 12))
+                    .foregroundStyle(OtoUI.mutedFG)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(OtoUI.rowIdle, in: RoundedRectangle(cornerRadius: OtoUI.chipRadius))
+        .overlay {
+            RoundedRectangle(cornerRadius: OtoUI.chipRadius)
+                .strokeBorder(OtoUI.strokeColor.opacity(0.5), lineWidth: 1)
+        }
     }
 
     /// Picker that fuses two sources: well-known apps (always visible so
@@ -675,6 +796,120 @@ struct RuleEditorSheet: View {
             RoundedRectangle(cornerRadius: OtoUI.chipRadius)
                 .strokeBorder(Color.otoYellow.opacity(0.35), lineWidth: 1)
         }
+    }
+
+    private func dryRunBanner(_ result: RuleDryRunResult) -> some View {
+        let tint: Color = result.isPositive ? .otoTeal : (result.outcome == .targetMissing || result.outcome == .invalid || result.outcome == .conflict ? .otoAlert : .otoYellow)
+        return HStack(alignment: .top, spacing: 10) {
+            OtoIcon(name: result.isPositive ? "checkmark.circle.fill" : "info.circle.fill", size: 14)
+                .foregroundStyle(tint)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(result.title)
+                    .font(.system(size: 12, weight: .semibold))
+                Text(result.message)
+                    .font(.system(size: 11))
+                    .foregroundStyle(OtoUI.mutedFG)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(tint.opacity(0.10), in: RoundedRectangle(cornerRadius: OtoUI.chipRadius))
+        .overlay {
+            RoundedRectangle(cornerRadius: OtoUI.chipRadius)
+                .strokeBorder(tint.opacity(0.35), lineWidth: 1)
+        }
+    }
+
+    private var previewText: String {
+        "\(triggerPreview), \(actionPreview)\(conditionPreview)\(profilePreview)."
+    }
+
+    private var triggerPreview: String {
+        switch triggerKind {
+        case .deviceConnects:
+            return "When \(selectedTriggerDeviceName) connects"
+        case .deviceDisconnects:
+            return "When \(selectedTriggerDeviceName) disconnects"
+        case .anyBluetooth:
+            return "When any Bluetooth device connects"
+        case .systemWakes:
+            return "When system wakes up"
+        case .appLaunches:
+            return "When \(selectedAppName) launches"
+        }
+    }
+
+    private var actionPreview: String {
+        switch actionKind {
+        case .setInput:
+            return "set input to \(selectedInputName)"
+        case .setOutput:
+            return "set output to \(selectedOutputName)"
+        case .setBoth:
+            return "set input to \(selectedInputName) and output to \(selectedOutputName)"
+        case .setInputVolume:
+            return "set input volume to \(Int(volume * 100))%"
+        case .setOutputVolume:
+            return "set output volume to \(Int(outputVolume * 100))%"
+        case .toggleInputMute:
+            return "toggle input mute"
+        case .keepCurrent:
+            return "keep the current input"
+        }
+    }
+
+    private var conditionPreview: String {
+        conditionKind.domain.map { ", \(lowercasedLeading($0.displayText))" } ?? ""
+    }
+
+    private var profilePreview: String {
+        guard let profileID,
+              let profile = state.store.profiles.first(where: { $0.id == profileID }) else { return "" }
+        return ", in the \(profile.name) profile"
+    }
+
+    private var selectedTriggerDeviceName: String {
+        state.monitor.allDevices.first(where: { $0.uid == triggerDeviceUID })?.name ?? (triggerDeviceName.isEmpty ? "a device" : triggerDeviceName)
+    }
+
+    private var selectedAppName: String {
+        let combined = WellKnownApps.suggestions + state.appLaunchMonitor.runningApps
+        return combined.first(where: { $0.bundleID == triggerAppBundleID })?.name ?? (triggerAppName.isEmpty ? "an app" : triggerAppName)
+    }
+
+    private var selectedInputName: String {
+        state.inputDevices.first(where: { $0.uid == inputDeviceUID })?.name ?? (inputDeviceName.isEmpty ? "an input" : inputDeviceName)
+    }
+
+    private var selectedOutputName: String {
+        state.monitor.allDevices.first(where: { $0.uid == outputDeviceUID })?.name ?? (outputDeviceName.isEmpty ? "an output" : outputDeviceName)
+    }
+
+    private func lowercasedLeading(_ text: String) -> String {
+        guard let first = text.first else { return text }
+        return first.lowercased() + text.dropFirst()
+    }
+
+    private func performDryRun() {
+        guard let rule = buildRule() else { return }
+        var result = RuleDryRunner.evaluate(rule: rule, monitor: state.monitor, store: state.store)
+        if let warning = conflictWarning, result.outcome == .wouldApply {
+            result = RuleDryRunResult(
+                outcome: .conflict,
+                title: "Conflict possible",
+                message: warning,
+                targetName: rule.action.displayText
+            )
+        }
+        dryRunResult = result
+        state.store.recordFire(
+            rule: rule,
+            deviceName: result.targetName,
+            outcome: result.outcome.historyOutcome,
+            resultSummary: result.message,
+            isDryRun: true
+        )
     }
 
     private func buildRule() -> Rule? {

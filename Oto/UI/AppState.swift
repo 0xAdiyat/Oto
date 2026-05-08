@@ -4,12 +4,15 @@ import Observation
 @Observable
 @MainActor
 final class AppState {
+    static let firstRunSetupCompletedKey = "Oto.hasCompletedFirstRunSetup.v1"
+
     let monitor: AudioDeviceMonitor
     let store: RuleStore
     let appLaunchMonitor: AppLaunchMonitor
     let quietHours: QuietHoursManager
     let deviceLock: DeviceLockManager
     private let engine: RuleEngine
+    var isShowingFirstRunSetup = false
 
     init() {
         let monitor = AudioDeviceMonitor()
@@ -37,5 +40,14 @@ final class AppState {
 
     func switchTo(_ device: AudioDevice) {
         try? AudioDeviceSwitcher.setDefaultInput(device)
+    }
+
+    func presentFirstRunSetup() {
+        isShowingFirstRunSetup = true
+    }
+
+    func completeFirstRunSetup() {
+        UserDefaults.standard.set(true, forKey: Self.firstRunSetupCompletedKey)
+        isShowingFirstRunSetup = false
     }
 }

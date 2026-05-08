@@ -154,3 +154,81 @@ There is currently no automated test suite. Verification is manual:
 - Keep UI changes scoped to the `UI/` layer; keep audio logic scoped to `Auto/`
 - Any new design token belongs in `OtoTheme.swift`; do not scatter magic numbers across view files
 - Run a clean build (`xcodebuild clean build`) before opening a PR
+
+
+<claude-mem-context>
+# Memory Context
+
+# [Oto] recent context, 2026-05-09 12:42am GMT+6
+
+Legend: 🎯session 🔴bugfix 🟣feature 🔄refactor ✅change 🔵discovery ⚖️decision 🚨security_alert 🔐security_note
+Format: ID TIME TYPE TITLE
+Fetch details: get_observations([IDs]) | Search: mem-search skill
+
+Stats: 50 obs (17,471t read) | 432,480t work | 96% savings
+
+### May 8, 2026
+S211 Implement three audio management features in the Oto macOS SwiftUI app: speaker safety volume cap on music launch, late-night volume restriction, and input device lock veto (May 8 at 7:13 PM)
+794 7:26p 🟣 AudioDeviceMonitor: onDefaultOutputChanged C-Callback Added, Monitor Complete
+795 " 🟣 AudioDevice: isHeadphoneOutput Property Added for Speaker Safety Detection
+796 " 🟣 Rule.swift: appLaunches Trigger, setOutputVolume Action, and RuleCondition Added
+797 7:27p 🟣 AppLaunchMonitor.swift Created: NSWorkspace App Launch Observation
+798 " 🟣 RuleEngine: AppLaunchMonitor Dependency Added
+799 " 🟣 RuleEngine: appLaunched Subject Subscribed, AppLaunchMonitor Injected via init
+800 " 🟣 RuleEngine: handleAppLaunched Implemented for appLaunches Trigger
+801 " 🟣 RuleEngine: RuleCondition Evaluation Wired into matchingRules
+802 7:28p 🟣 RuleEngine: setOutputVolume Action Implemented in apply()
+803 " ✅ RuleStore: Schema Version Bumped to 4 for New Rule Fields
+804 " 🟣 QuietHoursManager.swift Created: Late-Night Volume Cap Feature
+S212 Analyze the Oto project and identify improvements and new features to build — resulted in implementing three major features (May 8 at 7:29 PM)
+805 7:30p 🟣 NotificationService: notifyQuietHoursClamped Added
+806 " 🟣 DeviceLockManager.swift Created: Input/Output Device Lock Veto
+807 " 🟣 AppState: All Three New Services Wired into App Composition Root
+808 " 🟣 Settings: Quiet Hours Tab Added to OtoSettingsView
+809 " 🟣 QuietHoursSettingsTab UI Implemented in SettingsScene.swift
+810 7:31p 🔵 RulesView: RuleEditorSheet Structure Examined Before Extension
+811 " 🔵 RulesView: buildRule() Returns Rule Without condition Field
+812 " 🟣 RuleEditorSheet: New State, TriggerKind, ActionKind, and ConditionKind Added
+813 " 🟣 RuleEditorSheet: App Picker Row Added for appLaunches Trigger
+S213 Fix _NSDetectedLayoutRecursion warning caused by hidden Undo/Redo buttons in MainWindowView (May 8 at 7:36 PM)
+814 7:38p 🔴 Fixed _NSDetectedLayoutRecursion from undo/redo keyboard shortcut buttons
+815 7:39p 🔄 UndoCommandCarriers extracted as isolated SwiftUI invalidation scope
+S214 Analyze project and suggest improvements and new features — resulted in implementing a QuietHoursStatusChip UI component for a SwiftUI app (May 8 at 7:39 PM)
+816 7:41p 🔵 Build failed: missing Combine import in MainWindowView.swift
+S215 Analyze project and identify improvements and new features to implement (May 8 at 7:42 PM)
+817 7:42p 🔵 Critical Disk Space: 98% Full on Mac Dev Machine
+818 7:46p 🟣 Batch rule enable/disable with smart undo
+819 7:47p 🟣 Dual-mode filter chips with bulk pause/resume actions
+820 " 🟣 BulkAction enum with discovery and validity checking
+821 " ✅ Scoped animation for filter chip transitions
+S216 Analyze Oto project for improvements and implement new features based on analysis (May 8 at 7:47 PM)
+822 7:48p 🟣 Quiet hours quick toggle in menu bar
+823 7:49p 🟣 Icon-only Quiet Hours toggle for menu bar
+S217 Analyze the Oto project and identify improvements and new features (May 8 at 7:49 PM)
+S218 Analyze Oto project and implement improvements and new features, focusing on UI refinement and user experience enhancements (May 8 at 7:55 PM)
+S219 Analyze the Oto project and identify improvements and new features. Session evolved into systematic UI refinement and implementation of a custom sheet presentation system. (May 8 at 7:57 PM)
+S220 Analysis of Oto project with improvements and new features. Session evolved into implementation of custom sheet presentation system with visual refinements. (May 8 at 8:06 PM)
+### May 9, 2026
+866 12:31a 🟣 Oto Spotlight-Style MainWindowView Complete Rewrite
+867 12:32a ✅ UI Color Scheme Change Request: Red → Purple or Logo-Derived Color
+868 " 🟣 MainWindowView Refactored to Component-Based Architecture (Second Iteration)
+869 12:33a 🔵 Oto App Theme System: otoTeal Is the Primary Accent Color
+870 " 🔵 Oto Logo Assets Available in SVG for Color Sampling
+871 " 🟣 Oto Spotlight UI Second Iteration Builds Successfully
+872 " ✅ otoSettingsSurface Color Updated from Warm Cream to Cool Purple-Tinted Tones
+873 12:36a ⚖️ Oto Mac App — UI/UX & Feature Ideation Session
+874 " 🔵 Oto Settings UI Architecture — SwiftUI Design System Explored
+875 12:37a ✅ OtoTheme.swift — Settings Design Token Refinements
+876 " ✅ SettingsScene.swift — Settings UI Polish Pass Applied
+877 " 🔵 Remaining OtoUI.mutedFG/secondaryFG References in SettingsScene.swift
+878 " ✅ SettingsScene.swift — Full OtoUI Foreground Token Migration Completed
+879 12:38a ✅ Oto Debug Build — Settings UI Polish Changes Compile Clean
+880 12:40a 🔵 Oto App — Full UI Architecture and Settings Entry Points Mapped
+881 " 🔵 MenuBarView.swift — Structure and Remaining Legacy Token Locations Identified
+882 " 🔴 MenuBarView — Gear Icon Now Opens Settings Instead of Main Window
+883 " ✅ Oto Build Succeeded — MenuBarView Settings Navigation Fix Verified
+884 " ✅ OtoTheme.swift — Settings Window Width Reduced to 900pt
+885 12:41a ✅ Oto Build Succeeded — 900pt Window Width Change Verified Clean
+
+Access 432k tokens of past work via get_observations([IDs]) or mem-search skill.
+</claude-mem-context>

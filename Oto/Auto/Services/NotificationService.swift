@@ -46,8 +46,8 @@ final class NotificationService {
         requestAuthorizationIfNeeded()
 
         let content = UNMutableNotificationContent()
-        content.title = "Quiet hours"
-        content.body = "Volume capped at \(cappedPercent)% (was \(attemptedPercent)%)."
+        content.title = "Quiet Hours is limiting volume"
+        content.body = "Volume was reset to \(cappedPercent)% from \(attemptedPercent)%. Disable Quiet Hours to go higher."
         content.sound = nil // intentionally silent — this is a "shh" moment
 
         let request = UNNotificationRequest(identifier: "Oto.quietHours", content: content, trigger: nil)
