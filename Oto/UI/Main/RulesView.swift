@@ -202,28 +202,31 @@ struct RuleRow: View {
 
                 // Combined "more" menu — Edit lives here so the standalone
                 // gear button is gone (cleaner row, less visual noise).
-                // Hidden until the row is hovered.
-                IconButton(
-                    icon: "ellipsis",
-                    iconSize: 13,
-                    help: "More",
-                    action: {}
-                )
-                .overlay {
-                    Menu {
-                        Button("Edit", action: onEdit)
-                        Button("Duplicate") { state.store.duplicate(rule) }
-                        Button(rule.enabled ? "Disable" : "Enable") { state.store.toggle(rule) }
-                        Divider()
-                        Button("Delete", role: .destructive) { state.store.delete(rule) }
-                    } label: {
-                        Color.clear
+                // Conditionally rendered (not just opacity-faded) so the
+                // toggle slides into the freed space when the row isn't
+                // hovered, instead of leaving a phantom gap.
+                if isHovering {
+                    IconButton(
+                        icon: "ellipsis",
+                        iconSize: 13,
+                        help: "More",
+                        action: {}
+                    )
+                    .overlay {
+                        Menu {
+                            Button("Edit", action: onEdit)
+                            Button("Duplicate") { state.store.duplicate(rule) }
+                            Button(rule.enabled ? "Disable" : "Enable") { state.store.toggle(rule) }
+                            Divider()
+                            Button("Delete", role: .destructive) { state.store.delete(rule) }
+                        } label: {
+                            Color.clear
+                        }
+                        .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
                     }
-                    .menuStyle(.borderlessButton)
-                    .menuIndicator(.hidden)
+                    .transition(.opacity.combined(with: .move(edge: .trailing)))
                 }
-                .opacity(isHovering ? 1 : 0)
-                .allowsHitTesting(isHovering)
             }
         }
         .padding(.horizontal, 10)
