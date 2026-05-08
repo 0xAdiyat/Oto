@@ -5,11 +5,20 @@ import SwiftUI
 struct MenuBarView: View {
     @Environment(AppState.self) private var state
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openSettings) private var openSettings
     let openMain: () -> Void
 
     private func openMainAndDismiss() {
         dismiss()
         openMain()
+    }
+
+    private func openSettingsAndDismiss() {
+        dismiss()
+        DispatchQueue.main.async {
+            openSettings()
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 
     var body: some View {
@@ -58,8 +67,8 @@ struct MenuBarView: View {
                     .foregroundStyle(OtoUI.secondaryFG)
             }
             QuietHoursMenuBarToggle()
-            IconButton(icon: "gearshape", iconSize: 14, help: "Open Oto") {
-                openMainAndDismiss()
+            IconButton(icon: "gearshape", iconSize: 14, help: "Settings") {
+                openSettingsAndDismiss()
             }
         }
     }
@@ -376,4 +385,3 @@ private struct DeviceRow<Trailing: View>: View {
         .padding(.vertical, 2)
     }
 }
-

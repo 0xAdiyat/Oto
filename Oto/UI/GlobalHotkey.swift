@@ -10,7 +10,7 @@ import SwiftUI
 /// Why Carbon: It remains the only public API on macOS for system-wide
 /// hotkeys without requiring Accessibility permission. The Carbon Events
 /// shim is fully supported on Apple Silicon and is what every modern menu-
-/// bar app (Raycast, Alfred, Things, etc.) uses under the hood.
+/// bar app or launcher uses under the hood.
 @MainActor
 @Observable
 final class GlobalHotkeyManager {

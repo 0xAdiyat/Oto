@@ -39,6 +39,10 @@ extension Color {
         light: NSColor(srgbRed: 0.733, green: 0.247, blue: 0.247, alpha: 1),
         dark:  NSColor(srgbRed: 0.910, green: 0.416, blue: 0.416, alpha: 1)
     )
+    static let otoSettingsSurface = adaptive(
+        light: NSColor(srgbRed: 0.932, green: 0.936, blue: 0.966, alpha: 1),
+        dark:  NSColor(srgbRed: 0.070, green: 0.078, blue: 0.145, alpha: 1)
+    )
 
     /// Build a Color whose underlying NSColor resolves per-appearance. In dark
     /// mode (`darkAqua` / `vibrantDark`) returns `dark`; otherwise `light`.
@@ -57,6 +61,10 @@ enum OtoUI {
     static let panelWidth: CGFloat        = 720
     static let pillWidth: CGFloat         = 680
     static let pillHeight: CGFloat        = 64
+    static let spotlightSearchHeight: CGFloat = 44
+    static let spotlightFooterHeight: CGFloat = 46
+    static let spotlightRowHeight: CGFloat    = 60
+    static let spotlightSectionGap: CGFloat   = 14
 
     // Corner radii
     static let panelRadius: CGFloat       = 24
@@ -107,6 +115,33 @@ enum OtoUI {
     static let rowHeight: CGFloat          = 74
     static let iconButtonSize: CGFloat     = 30
     static let triggerTileSize: CGFloat    = 48
+}
+
+enum OtoSettingsUI {
+    static let windowWidth: CGFloat        = 900
+    static let windowHeight: CGFloat       = 640
+    static let contentMaxWidth: CGFloat    = 500
+    static let contentTopPadding: CGFloat  = 14
+    static let sectionSpacing: CGFloat     = 0
+    static let cardSpacing: CGFloat        = 10
+    static let cardPadding: CGFloat        = 14
+    static let topBarHeight: CGFloat       = 94
+    static let topTabWidth: CGFloat        = 88
+    static let topTabHeight: CGFloat       = 54
+    static let cardRadius: CGFloat         = 12
+    static let controlRadius: CGFloat      = 10
+    static let tabSelected                 = Color.primary.opacity(0.12)
+    static let tabHover                    = Color.primary.opacity(0.06)
+    static let cardFill                    = Color.primary.opacity(0.04)
+    static let controlFill                 = Color.primary.opacity(0.095)
+    static let subtleFill                  = Color.primary.opacity(0.035)
+    static let glassStroke                 = Color.primary.opacity(0.16)
+    static let strongStroke                = Color.primary.opacity(0.24)
+    static let glassHighlight              = Color.white.opacity(0.07)
+    static let labelFG                     = Color.primary.opacity(0.72)
+    static let valueFG                     = Color.primary.opacity(0.88)
+    static let quietFG                     = Color.primary.opacity(0.58)
+    static let windowShadow                = Color.black.opacity(0.26)
 }
 
 // MARK: - Reusable view modifiers

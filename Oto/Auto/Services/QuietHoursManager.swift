@@ -67,19 +67,23 @@ final class QuietHoursManager {
     /// per-device, not system-wide — a freshly-connected output gets its
     /// own listener install).
     @ObservationIgnored nonisolated(unsafe) private var listenedDeviceID: AudioDeviceID?
-    @ObservationIgnored nonisolated(unsafe) private var listenerInstalled = false
+    @ObservationIgnored nonisolated(unsafe) private var listenedAddresses: [AudioObjectPropertyAddress] = []
 
-    /// 30 s tick — coarse enough to be cheap, fine enough that a
-    /// midnight-window-entry happens within half a minute. We don't need
-    /// real-time precision for "music too loud at 1am."
+    /// A short follow-up clamp after a volume-change callback. Some macOS
+    /// volume key paths emit the property notification before the final scalar
+    /// has settled; rechecking a fraction later makes the cap feel locked.
+    @ObservationIgnored private var pendingReassertion: Task<Void, Never>?
+
+    /// Five-second tick — cheap, but frequent enough to recover quickly on
+    /// devices that do not emit software volume property notifications.
     @ObservationIgnored private var tickTimer: Timer?
 
     /// Avoid spamming the user with banner notifications when CoreAudio
-    /// emits multiple volume-change events in a row (which it does when
-    /// macOS slides volume via the keyboard). Track the last notify time
-    /// and rate-limit to one per minute per window-enter.
+    /// emits multiple volume-change events in a row. Track the last notify
+    /// time and rate-limit, but keep it short enough that a repeated manual
+    /// attempt still gets clear feedback.
     @ObservationIgnored private var lastNotificationAt: Date?
-    @ObservationIgnored private static let notificationCooldown: TimeInterval = 60
+    @ObservationIgnored private static let notificationCooldown: TimeInterval = 12
 
     private static let storageKey = "Oto.quietHours.v1"
 
@@ -92,7 +96,8 @@ final class QuietHoursManager {
 
     deinit {
         tickTimer?.invalidate()
-        if let id = listenedDeviceID, listenerInstalled {
+        pendingReassertion?.cancel()
+        if let id = listenedDeviceID, !listenedAddresses.isEmpty {
             removeListener(deviceID: id)
         }
     }
@@ -113,12 +118,10 @@ final class QuietHoursManager {
 
         refreshListener()
 
-        // Periodic tick — drives window-entry enforcement. We bind `self`
-        // weakly inside the closure and then weakly again inside the Task —
-        // the explicit double-capture is what Swift 6 needs to prove the
-        // closure is concurrency-safe.
+        // Periodic tick — drives window-entry enforcement and backs up
+        // devices that don't notify on volume key changes.
         tickTimer?.invalidate()
-        let timer = Timer(timeInterval: 30, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
             guard let self else { return }
             Task { @MainActor [weak self] in
                 self?.enforceIfNeeded()
@@ -158,11 +161,11 @@ final class QuietHoursManager {
 
     private func refreshListener() {
         // Tear down the previous listener if any.
-        if let oldID = listenedDeviceID, listenerInstalled {
+        if let oldID = listenedDeviceID, !listenedAddresses.isEmpty {
             removeListener(deviceID: oldID)
         }
         listenedDeviceID = nil
-        listenerInstalled = false
+        listenedAddresses = []
 
         guard let dev = monitor?.defaultOutputDevice else { return }
         installListener(deviceID: dev.deviceID)
@@ -170,37 +173,41 @@ final class QuietHoursManager {
     }
 
     private func installListener(deviceID: AudioDeviceID) {
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyVolumeScalar,
-            mScope: kAudioObjectPropertyScopeOutput,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        guard AudioObjectHasProperty(deviceID, &address) else { return }
         let selfPtr = Unmanaged.passUnretained(self).toOpaque()
-        let status = AudioObjectAddPropertyListener(
-            deviceID,
-            &address,
-            quietHoursVolumeListener,
-            selfPtr
-        )
-        if status == noErr { listenerInstalled = true }
+        for element in Self.volumeElements {
+            var address = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyVolumeScalar,
+                mScope: kAudioObjectPropertyScopeOutput,
+                mElement: element
+            )
+            guard AudioObjectHasProperty(deviceID, &address) else { continue }
+            let status = AudioObjectAddPropertyListener(
+                deviceID,
+                &address,
+                quietHoursVolumeListener,
+                selfPtr
+            )
+            if status == noErr {
+                listenedAddresses.append(address)
+            }
+        }
     }
 
     private nonisolated func removeListener(deviceID: AudioDeviceID) {
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyVolumeScalar,
-            mScope: kAudioObjectPropertyScopeOutput,
-            mElement: kAudioObjectPropertyElementMain
-        )
         let selfPtr = Unmanaged.passUnretained(self).toOpaque()
-        AudioObjectRemovePropertyListener(
-            deviceID, &address, quietHoursVolumeListener, selfPtr
-        )
+        for storedAddress in listenedAddresses {
+            var address = storedAddress
+            AudioObjectRemovePropertyListener(
+                deviceID, &address, quietHoursVolumeListener, selfPtr
+            )
+        }
+        listenedAddresses = []
     }
 
     fileprivate nonisolated func handleVolumeChanged() {
         DispatchQueue.main.async { [weak self] in
             self?.enforceIfNeeded()
+            self?.scheduleReassertion()
         }
     }
 
@@ -228,6 +235,15 @@ final class QuietHoursManager {
         }
     }
 
+    private func scheduleReassertion() {
+        pendingReassertion?.cancel()
+        pendingReassertion = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(180))
+            guard !Task.isCancelled else { return }
+            self?.enforceIfNeeded()
+        }
+    }
+
     private func maybeNotify(currentPercent: Int) {
         let now = Date()
         if let last = lastNotificationAt,
@@ -240,6 +256,12 @@ final class QuietHoursManager {
             attemptedPercent: currentPercent
         )
     }
+
+    private static let volumeElements: [UInt32] = [
+        kAudioObjectPropertyElementMain,
+        1,
+        2
+    ]
 }
 
 // MARK: - C listener

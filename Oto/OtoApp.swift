@@ -29,13 +29,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             SpotlightWindowController.shared.toggle()
         }
 
-        // First-run welcome: auto-present the main window the very first time
-        // Oto launches so users discover it isn't trapped in the menu bar.
-        // Persisted in UserDefaults — uninstalling/reinstalling clears the
-        // flag, so a fresh install retriggers the welcome.
-        let firstRunKey = "Oto.hasShownFirstRunWindow"
-        if !UserDefaults.standard.bool(forKey: firstRunKey) {
-            UserDefaults.standard.set(true, forKey: firstRunKey)
+        // First-run setup: present the Spotlight panel with a guided overlay
+        // instead of only opening an empty window.
+        if !UserDefaults.standard.bool(forKey: AppState.firstRunSetupCompletedKey) {
+            state.presentFirstRunSetup()
             SpotlightWindowController.shared.present(activate: true)
         }
     }

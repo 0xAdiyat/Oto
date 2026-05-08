@@ -121,7 +121,13 @@ final class RuleStore {
     }
 
     func duplicate(_ rule: Rule) {
-        let copy = Rule(trigger: rule.trigger, action: rule.action, enabled: rule.enabled, profileID: rule.profileID)
+        let copy = Rule(
+            trigger: rule.trigger,
+            action: rule.action,
+            enabled: rule.enabled,
+            profileID: rule.profileID,
+            condition: rule.condition
+        )
         let insertionIndex: Int
         if let idx = rules.firstIndex(where: { $0.id == rule.id }) {
             insertionIndex = idx + 1
@@ -193,20 +199,42 @@ final class RuleStore {
 
     // MARK: - Fire history
 
-    func recordFire(rule: Rule, deviceName: String, outcome: RuleFireOutcome, at date: Date = .now) {
+    func recordFire(
+        rule: Rule,
+        deviceName: String,
+        outcome: RuleFireOutcome,
+        resultSummary: String? = nil,
+        isDryRun: Bool = false,
+        at date: Date = .now
+    ) {
         let event = RuleFireEvent(
             id: UUID(),
             ruleID: rule.id,
             ruleSummary: rule.trigger.displayText,
+            actionSummary: rule.action.timelineText,
             deviceName: deviceName,
+            profileName: profileName(for: rule.profileID),
+            conditionSummary: rule.condition?.displayText,
+            resultSummary: resultSummary ?? outcome.displayText,
             firedAt: date,
-            outcome: outcome
+            outcome: outcome,
+            isDryRun: isDryRun
         )
         fireHistory.insert(event, at: 0)
         if fireHistory.count > historyLimit {
             fireHistory = Array(fireHistory.prefix(historyLimit))
         }
         saveHistory()
+    }
+
+    func clearFireHistory() {
+        fireHistory.removeAll()
+        saveHistory()
+    }
+
+    private func profileName(for id: UUID?) -> String? {
+        guard let id else { return nil }
+        return profiles.first(where: { $0.id == id })?.name
     }
 
     // MARK: - Persistence
@@ -331,25 +359,56 @@ enum RuleFireOutcome: Codable, Hashable {
     case noOp           // rule action is .keepCurrent, intentionally did nothing
     case targetMissing  // target device unavailable
     case failed         // CoreAudio call returned an error
+
+    var displayText: String {
+        switch self {
+        case .applied: return "Applied"
+        case .noOp: return "Skipped"
+        case .targetMissing: return "Missing target"
+        case .failed: return "Failed"
+        }
+    }
 }
 
 struct RuleFireEvent: Identifiable, Codable, Hashable {
     let id: UUID
     let ruleID: UUID
     let ruleSummary: String
+    let actionSummary: String?
     let deviceName: String
+    let profileName: String?
+    let conditionSummary: String?
+    let resultSummary: String?
     let firedAt: Date
     let outcome: RuleFireOutcome
+    let isDryRun: Bool
 
     /// Backwards-compatible decoding for events written before the
     /// `outcome` field existed.
-    init(id: UUID, ruleID: UUID, ruleSummary: String, deviceName: String, firedAt: Date, outcome: RuleFireOutcome) {
+    init(
+        id: UUID,
+        ruleID: UUID,
+        ruleSummary: String,
+        actionSummary: String? = nil,
+        deviceName: String,
+        profileName: String? = nil,
+        conditionSummary: String? = nil,
+        resultSummary: String? = nil,
+        firedAt: Date,
+        outcome: RuleFireOutcome,
+        isDryRun: Bool = false
+    ) {
         self.id = id
         self.ruleID = ruleID
         self.ruleSummary = ruleSummary
+        self.actionSummary = actionSummary
         self.deviceName = deviceName
+        self.profileName = profileName
+        self.conditionSummary = conditionSummary
+        self.resultSummary = resultSummary
         self.firedAt = firedAt
         self.outcome = outcome
+        self.isDryRun = isDryRun
     }
 
     init(from decoder: Decoder) throws {
@@ -357,8 +416,30 @@ struct RuleFireEvent: Identifiable, Codable, Hashable {
         id = try c.decode(UUID.self, forKey: .id)
         ruleID = try c.decode(UUID.self, forKey: .ruleID)
         ruleSummary = try c.decode(String.self, forKey: .ruleSummary)
+        actionSummary = try? c.decode(String.self, forKey: .actionSummary)
         deviceName = try c.decode(String.self, forKey: .deviceName)
+        profileName = try? c.decode(String.self, forKey: .profileName)
+        conditionSummary = try? c.decode(String.self, forKey: .conditionSummary)
+        resultSummary = try? c.decode(String.self, forKey: .resultSummary)
         firedAt = try c.decode(Date.self, forKey: .firedAt)
         outcome = (try? c.decode(RuleFireOutcome.self, forKey: .outcome)) ?? .applied
+        isDryRun = (try? c.decode(Bool.self, forKey: .isDryRun)) ?? false
+    }
+}
+
+extension RuleAction {
+    var timelineText: String {
+        switch self {
+        case .setInput(_, let name): return "Set input to \(name)"
+        case .setOutput(_, let name): return "Set output to \(name)"
+        case .setBoth(_, let inputName, _, let outputName):
+            return inputName == outputName
+                ? "Set input and output to \(inputName)"
+                : "Set input to \(inputName) and output to \(outputName)"
+        case .setInputVolume(let volume): return "Set input volume to \(Int(volume * 100))%"
+        case .setOutputVolume(let volume): return "Set output volume to \(Int(volume * 100))%"
+        case .toggleInputMute: return "Toggle input mute"
+        case .keepCurrent: return "Keep current input"
+        }
     }
 }

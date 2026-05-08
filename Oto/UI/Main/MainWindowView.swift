@@ -2,8 +2,7 @@ import Combine
 import SwiftUI
 
 /// Spotlight-style root view: borderless transparent window contents.
-/// Header pill on top, filter bar, then the rules panel — staggered entrance
-/// animation matches media-downloader's ContentView reveal.
+/// Header pill on top, filter bar, then the rules panel.
 struct MainWindowView: View {
     @Environment(AppState.self) private var state
     @Environment(\.openSettings) private var openSettings
@@ -58,32 +57,32 @@ struct MainWindowView: View {
                 .scaleEffect(panelAppeared ? 1 : 0.985, anchor: .top)
                 .blur(radius: panelAppeared ? 0 : 5)
                 .offset(y: panelAppeared ? 0 : -8)
+
+                footerBar
+                    .opacity(panelAppeared ? 1 : 0)
+                    .offset(y: panelAppeared ? 0 : -4)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(.top, 56)
             .padding(.bottom, 56)
 
-            // In-panel sheet overlay. Replaces SwiftUI's `.sheet` modifier
-            // because the system sheet on a borderless transparent NSPanel
-            // applies a hard-edged rectangular dim to the parent that
-            // doesn't conform to the panel's rounded corners — visually
-            // broken. Rendering as a sibling in the ZStack keeps the dim
-            // inside the panel and inherits its rounded mask via the
-            // window's existing transparent shape.
-            if isSheetActive {
+            if state.isShowingFirstRunSetup {
+                firstRunOverlay
+                    .transition(.opacity)
+            } else if isSheetActive {
                 sheetOverlay
                     .transition(.opacity)
             }
 
-            // Hidden ⌘Z / ⇧⌘Z carriers. We register them as zero-frame
-            // siblings of the main content rather than inside `.background`:
-            // putting NSButton-bridged controls in a `.background` causes
-            // AppKit's layout system to re-measure them mid-parent-layout
-            // every time `canUndo` / `canRedo` flips, which trips
-            // `_NSDetectedLayoutRecursion`. As true ZStack siblings with a
-            // zero frame and `.hidden()`, they stay in the responder chain
-            // (so the keyboard shortcut works) without participating in any
-            // layout that the rest of the panel is doing.
+            SpotlightFooterShortcutCarriers(
+                canShowActions: editingRule != nil,
+                onShowActions: { editingRule = nil },
+                onNewRule: { sheet = .addRule },
+                onOpenSettings: { openSettings() }
+            )
+            .frame(width: 0, height: 0)
+            .hidden()
+
             UndoCommandCarriers()
                 .frame(width: 0, height: 0)
                 .hidden()
@@ -91,22 +90,100 @@ struct MainWindowView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .focusEffectDisabled()
         .suppressAppKitFocusRings()
-        // Single animation scoped to the overlay's appearance / dismissal.
-        // Tying it to `isSheetActive` (a derived Bool) instead of either
-        // raw `sheet` or `editingRule` means a transition between the two
-        // sheet states (rare — only happens if user opens an editor for a
-        // rule directly via context menu while another sheet is up) won't
-        // re-fire the animation needlessly.
         .animation(.easeOut(duration: 0.18), value: isSheetActive)
+        .animation(.easeOut(duration: 0.18), value: state.isShowingFirstRunSetup)
         .onAppear { runRevealAnimation() }
-        // Re-run the reveal exactly when the window is brought back on screen
-        // (orderOut → makeKeyAndOrderFront). Tying this to anything broader —
-        // NSApp.didBecomeActive, didResignActive — caused the panel to vanish
-        // on transient focus changes (e.g. clicking a filter tab triggered a
-        // brief app deactivation in the borderless window, which wiped the
-        // entrance state without a follow-up activate to restore it).
         .onReceive(NotificationCenter.default.publisher(for: .spotlightWindowDidPresent)) { _ in
             runRevealAnimation()
+        }
+    }
+
+    private var footerBar: some View {
+        HStack(spacing: 12) {
+            footerGroup(key: "Return", label: editingRule == nil ? "Edit Rule" : "Edit Rule")
+
+            footerDivider
+
+            footerGroup(key: "⌘K", label: "Actions")
+                .opacity(editingRule == nil ? 0.72 : 1)
+
+            footerDivider
+
+            footerGroup(key: "⌘N", label: "New Rule")
+
+            footerDivider
+
+            footerGroup(key: "⌘,", label: "Settings")
+
+            Spacer()
+
+            Text(footerHint)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(OtoUI.mutedFG)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 22)
+        .frame(width: OtoUI.pillWidth, height: OtoUI.spotlightFooterHeight)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: OtoUI.panelRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: OtoUI.panelRadius, style: .continuous)
+                .strokeBorder(OtoUI.strokeColor, lineWidth: OtoUI.strokeWidth)
+        }
+        .shadow(
+            color: OtoUI.shadowMedium,
+            radius: OtoUI.shadowMediumRadius,
+            x: 0,
+            y: OtoUI.shadowMediumY
+        )
+    }
+
+    private var footerHint: String {
+        if let rule = editingRule {
+            return "Return edits \(triggerSummary(for: rule).lowercased())"
+        }
+        return "Open a rule menu or use shortcuts"
+    }
+
+    private func footerGroup(key: String, label: String) -> some View {
+        HStack(spacing: 8) {
+            footerKey(key)
+            Text(label)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.primary)
+        }
+    }
+
+    private func footerKey(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(OtoUI.rowIdle, in: RoundedRectangle(cornerRadius: OtoUI.buttonRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: OtoUI.buttonRadius, style: .continuous)
+                    .strokeBorder(OtoUI.dividerColor, lineWidth: 1)
+            }
+    }
+
+    private var footerDivider: some View {
+        Rectangle()
+            .fill(OtoUI.dividerColor)
+            .frame(width: 1, height: 20)
+    }
+
+    private func triggerSummary(for rule: Rule) -> String {
+        switch rule.trigger {
+        case .deviceConnects(_, let name):
+            return name
+        case .deviceDisconnects(_, let name):
+            return name
+        case .anyBluetoothConnects:
+            return "Bluetooth rule"
+        case .systemWakes:
+            return "wake rule"
+        case .appLaunches(_, let appName):
+            return appName
         }
     }
 
@@ -116,51 +193,41 @@ struct MainWindowView: View {
         sheet != nil || editingRule != nil
     }
 
+    private var firstRunOverlay: some View {
+        ZStack {
+            Color.clear
+                .contentShape(Rectangle())
+                .accessibilityHidden(true)
+
+            FirstRunSetupSheet()
+                .environment(state)
+                .transition(.scale(scale: 0.96).combined(with: .opacity))
+        }
+    }
+
     @ViewBuilder
     private var sheetOverlay: some View {
         ZStack {
-            // No-tint backdrop. The sheet panels carry their own
-            // `.materialPanel()` chrome (frosted material + shadow + stroke)
-            // so visual separation is already built-in — adding a parent
-            // dim on top of that double-darkened the panel and produced
-            // the awkward rectangular tint the user saw.
-            //
-            // `Color.clear` still participates in hit-testing in SwiftUI,
-            // so click-outside-to-dismiss continues to work without any
-            // visual cost.
             Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture { dismissActiveSheet() }
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel("Dismiss")
 
-            // Active sheet content. Two-axis transition (scale + opacity)
-            // matches macOS sheet entry feel without dragging in any
-            // bridged AppKit chrome.
             currentSheetContent
                 .transition(.scale(scale: 0.96).combined(with: .opacity))
 
-            // Escape-to-dismiss. Hidden zero-frame Button purely as a
-            // keyboard shortcut sink — same rationale as UndoCommandCarriers
-            // (kept out of `.background` to dodge layout recursion).
             Button("Cancel") { dismissActiveSheet() }
                 .keyboardShortcut(.cancelAction)
                 .frame(width: 0, height: 0)
                 .opacity(0)
                 .accessibilityHidden(true)
         }
-        // Inject our closure-based dismiss into the environment so each
-        // sheet view's `@Environment(\.otoDismiss) dismiss` resolves to
-        // *this* presenter's tear-down path, regardless of which case in
-        // `ActiveSheet` (or `editingRule`) is currently up.
         .environment(\.otoDismiss, OtoDismissAction(action: dismissActiveSheet))
     }
 
     @ViewBuilder
     private var currentSheetContent: some View {
-        // editingRule wins over `sheet` if both are somehow set — neither
-        // path normally produces that state, but defensive ordering keeps
-        // a stale `sheet` from preempting an active edit.
         if let rule = editingRule {
             RuleEditorSheet(existing: rule).environment(state)
         } else if let active = sheet {
@@ -180,9 +247,6 @@ struct MainWindowView: View {
     }
 
     private func dismissActiveSheet() {
-        // Clear whichever drove the overlay open. editingRule has priority
-        // (matches `currentSheetContent`'s evaluation order) so user expectation
-        // — "the thing on top is what closes" — holds even if both are non-nil.
         if editingRule != nil {
             editingRule = nil
         } else {
@@ -219,12 +283,6 @@ struct MainWindowView: View {
 
 // MARK: - Undo carriers
 
-/// Standalone view housing the hidden Undo / Redo buttons. Extracted so it
-/// owns its own SwiftUI invalidation scope: when `canUndo` / `canRedo`
-/// flips, only this tiny zero-frame view re-evaluates, not the whole
-/// MainWindowView body. That isolation is what keeps the AppKit layout
-/// engine from seeing repeated NSButton remeasurements during a parent
-/// layout pass (the source of `_NSDetectedLayoutRecursion`).
 private struct UndoCommandCarriers: View {
     @Environment(AppState.self) private var state
 
@@ -242,6 +300,29 @@ private struct UndoCommandCarriers: View {
     }
 }
 
+private struct SpotlightFooterShortcutCarriers: View {
+    let canShowActions: Bool
+    let onShowActions: () -> Void
+    let onNewRule: () -> Void
+    let onOpenSettings: () -> Void
+
+    var body: some View {
+        ZStack {
+            Button("Show Actions", action: onShowActions)
+                .keyboardShortcut("k", modifiers: .command)
+                .disabled(!canShowActions)
+
+            Button("New Rule", action: onNewRule)
+                .keyboardShortcut("n", modifiers: .command)
+
+            Button("Settings", action: onOpenSettings)
+                .keyboardShortcut(",", modifiers: .command)
+        }
+        .accessibilityHidden(true)
+        .allowsHitTesting(false)
+    }
+}
+
 // MARK: - Filter
 
 enum RuleFilter: String, CaseIterable, Identifiable {
@@ -249,9 +330,6 @@ enum RuleFilter: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String { rawValue.capitalized }
 
-    /// Each tab gets its own brand color when selected so the active filter
-    /// is identifiable at a glance — teal for the catch-all view, yellow for
-    /// "live" rules, alert-red for disabled ones.
     var tint: Color {
         switch self {
         case .all:      return .otoTeal
@@ -261,9 +339,6 @@ enum RuleFilter: String, CaseIterable, Identifiable {
     }
 }
 
-/// Secondary action attached to a selected filter chip. The chip's primary
-/// click still filters; this fires on the *second* click of an already-
-/// selected chip, and is also exposed via the chip's context menu.
 enum BulkAction {
     case pauseAll, resumeAll
 
@@ -288,9 +363,6 @@ enum BulkAction {
         }
     }
 
-    /// True when the action would actually change something — used to
-    /// disable the menu item and skip a redundant store mutation when, say,
-    /// the user clicks "Resume All" but everything is already enabled.
     func isMeaningful(rules: [Rule]) -> Bool {
         switch self {
         case .pauseAll:  return rules.contains { $0.enabled }
@@ -319,21 +391,9 @@ struct FilterTabsBar: View {
         }
         .frame(width: OtoUI.pillWidth)
         .padding(.horizontal, 4)
-        // Drives both the chip-selected highlight and the action-hint icon
-        // transition. Tied to `filter` (not the rule list) so adding /
-        // removing a rule doesn't ripple a chip animation.
         .animation(.easeOut(duration: 0.14), value: filter)
     }
 
-    /// Single filter pill. Two interaction modes:
-    /// - First click (chip not selected): selects the filter — the
-    ///   long-standing behaviour, unchanged.
-    /// - Second click (chip already selected) on `.active` or `.inactive`:
-    ///   performs the bulk pause/resume action that name implies. The
-    ///   secondary action is hinted with a small play/pause icon that only
-    ///   appears on the currently-selected actionable chip, so users
-    ///   discover the gesture without it getting in the way of the primary
-    ///   filter affordance.
     @ViewBuilder
     private func chip(for f: RuleFilter, isOn: Bool) -> some View {
         let tint = f.tint
@@ -371,9 +431,6 @@ struct FilterTabsBar: View {
         }
         .buttonStyle(.plain)
         .help(helpText(for: f, isOn: isOn, action: action))
-        // Right-click as an alternate path to the same bulk action — the
-        // primary chip click can still be "I just want to filter," and the
-        // power user has a dedicated secondary control in the context menu.
         .contextMenu {
             if let action {
                 Button(action.menuLabel) { performBulkAction(action) }
@@ -419,25 +476,10 @@ struct FilterTabsBar: View {
     }
 }
 
-// MARK: - Quiet Hours chip
-
-/// Compact toggle + status indicator for the global Quiet Hours guardrail.
-/// Lives in the filter bar so users can flip the cap on/off mid-session
-/// without opening Settings — useful when you're playing music *and* on a
-/// late-night call where the cap would clip the call audio.
-///
-/// States read at a glance:
-///   • Disabled                — outline, muted moon
-///   • Enabled, outside window — outline, navy moon, "starts at" tooltip
-///   • Enabled, inside window  — solid teal, dot indicator, "active" tooltip
 private struct QuietHoursStatusChip: View {
     @Environment(AppState.self) private var state
     @Environment(\.openSettings) private var openSettings
 
-    /// Refresh tick so the "outside window → inside window" transition
-    /// doesn't require a manual nudge. 60 s is good enough for a humans-
-    /// reading-a-pill use case; it aligns with the QuietHoursManager's
-    /// own tick cadence.
     @State private var refreshTick = Date()
 
     var body: some View {
@@ -448,18 +490,13 @@ private struct QuietHoursStatusChip: View {
             if inWindow                { return .otoTeal }
             return .otoNavy
         }()
-        let label: String = {
-            if !settings.enabled { return "Quiet hours" }
-            if inWindow          { return "Quiet hours" }
-            return "Quiet hours"
-        }()
 
         Button {
             state.quietHours.settings.enabled.toggle()
         } label: {
             HStack(spacing: 5) {
                 OtoIcon(name: inWindow ? "moon.stars.fill" : "moon.stars", size: 11)
-                Text(label)
+                Text("Quiet hours")
                     .font(.system(size: 11, weight: .medium))
                 if inWindow {
                     Circle()
@@ -494,10 +531,6 @@ private struct QuietHoursStatusChip: View {
                 state.quietHours.settings.enabled.toggle()
             }
         }
-        // Drive the in-window check off a slow timer so a window edge
-        // (e.g. crossing into 01:00) repaints without a click. The
-        // QuietHoursManager already polls every 30 s; this one is purely
-        // visual and runs at 60 s to match human scanning cadence.
         .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { now in
             refreshTick = now
         }
