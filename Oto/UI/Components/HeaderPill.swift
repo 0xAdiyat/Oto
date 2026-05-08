@@ -28,15 +28,7 @@ struct HeaderPill: View {
 
             profilePicker
 
-            HStack(spacing: 6) {
-                Circle().fill(Color.otoTeal).frame(width: 7, height: 7)
-                Text("Active")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(OtoUI.secondaryFG)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(OtoUI.rowIdle, in: Capsule())
+            MasterToggle()
 
             HStack(spacing: 4) {
                 HeaderIconButton(icon: "plus", help: "Add rule", action: onAdd)
@@ -140,4 +132,158 @@ private final class OverflowMenuTarget: NSObject {
     private let action: () -> Void
     init(_ action: @escaping () -> Void) { self.action = action }
     @objc func fire() { action() }
+}
+
+// MARK: - MasterToggle
+
+/// Compound status pill + master pause/resume button. Replaces the static
+/// "● Active" label that used to sit here.
+///
+/// Three derived states from the rule list — captured once in `summary` so
+/// the body, tooltip, accessibility, and animation keys all see the same
+/// truth on every render:
+///
+///   • allActive  — every rule enabled (typical happy-path)
+///   • paused     — every rule disabled (user hit pause-all)
+///   • mixed      — some rules enabled, some not (only with profile-scoped
+///                   rules + per-rule toggles)
+///   • idle       — no rules at all (greyed out, click is a no-op)
+///
+/// Click semantics match the FilterTabsBar second-click behaviour, so users
+/// who learn either gesture get the same vocabulary in both places:
+///   • from any state with at least one enabled rule → pause all
+///   • from `paused`                                 → resume all
+///   • from `idle`                                   → no action
+private struct MasterToggle: View {
+    @Environment(AppState.self) private var state
+
+    var body: some View {
+        let summary = Summary(rules: state.store.rules)
+
+        Button {
+            performToggle(summary: summary)
+        } label: {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(summary.dotColor)
+                    .frame(width: 7, height: 7)
+                Text(summary.label)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(summary.fgColor)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(OtoUI.rowIdle, in: Capsule())
+            .overlay {
+                Capsule()
+                    .strokeBorder(summary.borderColor, lineWidth: 1)
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(summary.kind == .idle)
+        .help(summary.helpText)
+        .accessibilityLabel("Master rule toggle")
+        .accessibilityValue(summary.accessibilityValue)
+        .accessibilityHint("Click to \(summary.actionVerb) all rules")
+        .contextMenu {
+            Button("Pause all rules") { state.store.setAllRulesEnabled(false) }
+                .disabled(!summary.hasAnyEnabled)
+            Button("Resume all rules") { state.store.setAllRulesEnabled(true) }
+                .disabled(!summary.hasAnyDisabled)
+        }
+        .animation(.easeOut(duration: 0.14), value: summary.kind)
+    }
+
+    private func performToggle(summary: Summary) {
+        switch summary.kind {
+        case .idle: return
+        case .paused: state.store.setAllRulesEnabled(true)
+        case .allActive, .mixed: state.store.setAllRulesEnabled(false)
+        }
+    }
+}
+
+/// Pure value type computed from a rule list. All visual / a11y state lives
+/// here so the SwiftUI body stays declarative and the same Summary instance
+/// is reused for every read in a single render pass.
+private struct Summary: Equatable {
+    enum Kind: Equatable { case allActive, paused, mixed, idle }
+
+    let kind: Kind
+    let activeCount: Int
+    let totalCount: Int
+
+    init(rules: [Rule]) {
+        totalCount = rules.count
+        activeCount = rules.lazy.filter(\.enabled).count
+        if totalCount == 0 {
+            kind = .idle
+        } else if activeCount == 0 {
+            kind = .paused
+        } else if activeCount == totalCount {
+            kind = .allActive
+        } else {
+            kind = .mixed
+        }
+    }
+
+    var label: String {
+        switch kind {
+        case .allActive: return "Active"
+        case .paused:    return "Paused"
+        case .mixed:     return "\(activeCount)/\(totalCount)"
+        case .idle:      return "No rules"
+        }
+    }
+
+    var dotColor: Color {
+        switch kind {
+        case .allActive: return .otoTeal
+        case .paused:    return .otoAlert
+        case .mixed:     return .otoYellow
+        case .idle:      return OtoUI.mutedFG
+        }
+    }
+
+    var fgColor: Color {
+        kind == .idle ? OtoUI.mutedFG : OtoUI.secondaryFG
+    }
+
+    var borderColor: Color {
+        switch kind {
+        case .allActive: return Color.otoTeal.opacity(0.32)
+        case .paused:    return Color.otoAlert.opacity(0.32)
+        case .mixed:     return Color.otoYellow.opacity(0.32)
+        case .idle:      return Color.clear
+        }
+    }
+
+    var helpText: String {
+        switch kind {
+        case .allActive: return "All \(totalCount) rules active — click to pause everything"
+        case .paused:    return "All \(totalCount) rules paused — click to resume everything"
+        case .mixed:     return "\(activeCount) of \(totalCount) rules active — click to pause everything"
+        case .idle:      return "No rules yet"
+        }
+    }
+
+    var accessibilityValue: String {
+        switch kind {
+        case .allActive: return "All \(totalCount) rules active"
+        case .paused:    return "All \(totalCount) rules paused"
+        case .mixed:     return "\(activeCount) of \(totalCount) rules active"
+        case .idle:      return "No rules"
+        }
+    }
+
+    var actionVerb: String {
+        switch kind {
+        case .paused: return "resume"
+        default:       return "pause"
+        }
+    }
+
+    var hasAnyEnabled:  Bool { activeCount > 0 }
+    var hasAnyDisabled: Bool { totalCount - activeCount > 0 && totalCount > 0 }
 }

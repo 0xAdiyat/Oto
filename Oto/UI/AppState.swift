@@ -6,14 +6,29 @@ import Observation
 final class AppState {
     let monitor: AudioDeviceMonitor
     let store: RuleStore
+    let appLaunchMonitor: AppLaunchMonitor
+    let quietHours: QuietHoursManager
+    let deviceLock: DeviceLockManager
     private let engine: RuleEngine
 
     init() {
         let monitor = AudioDeviceMonitor()
         let store = RuleStore()
+        let appLaunchMonitor = AppLaunchMonitor()
+        let quietHours = QuietHoursManager()
+        let deviceLock = DeviceLockManager()
+
         self.monitor = monitor
         self.store = store
-        self.engine = RuleEngine(monitor: monitor, store: store)
+        self.appLaunchMonitor = appLaunchMonitor
+        self.quietHours = quietHours
+        self.deviceLock = deviceLock
+        self.engine = RuleEngine(monitor: monitor, store: store, appMonitor: appLaunchMonitor)
+
+        // Start the guardrails after the engine is constructed so the
+        // re-assertion logic sees a fully-wired audio pipeline.
+        quietHours.start(monitor: monitor)
+        deviceLock.start(monitor: monitor)
     }
 
     var inputDevices: [AudioDevice] {

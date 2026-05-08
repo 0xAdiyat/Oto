@@ -22,6 +22,19 @@ struct AudioDeviceVolume {
         try setVolume(deviceID: device.deviceID, scope: kAudioObjectPropertyScopeInput, volume: clamped)
     }
 
+    /// Sets output scope volume for a device, clamped 0...1.
+    static func setOutputVolume(_ device: AudioDevice, volume: Double) throws {
+        let clamped = Float32(max(0, min(1, volume)))
+        try setVolume(deviceID: device.deviceID, scope: kAudioObjectPropertyScopeOutput, volume: clamped)
+    }
+
+    /// Reads current output volume (0...1). Returns nil if the device
+    /// doesn't expose a software-readable volume property — e.g. some
+    /// pro audio interfaces handle volume in hardware only.
+    static func getOutputVolume(_ device: AudioDevice) -> Double? {
+        readVolume(deviceID: device.deviceID, scope: kAudioObjectPropertyScopeOutput)
+    }
+
     /// Toggles input mute for a device. Returns the new mute state.
     @discardableResult
     static func toggleInputMute(_ device: AudioDevice) throws -> Bool {
@@ -66,6 +79,28 @@ struct AudioDeviceVolume {
             if lastStatus == noErr { throw VolumeError.unsupported }
             throw VolumeError.osStatus(lastStatus)
         }
+    }
+
+    /// Read scalar volume from the master element. Returns nil when no
+    /// readable element is present.
+    private static func readVolume(deviceID: AudioDeviceID, scope: AudioObjectPropertyScope) -> Double? {
+        // Same fallback chain as the setter — master then individual channels.
+        let candidates: [UInt32] = [kAudioObjectPropertyElementMain, 1, 2]
+        for element in candidates {
+            var address = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyVolumeScalar,
+                mScope: scope,
+                mElement: element
+            )
+            guard AudioObjectHasProperty(deviceID, &address) else { continue }
+            var value: Float32 = 0
+            var size = UInt32(MemoryLayout<Float32>.size)
+            let status = AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &value)
+            if status == noErr {
+                return Double(value)
+            }
+        }
+        return nil
     }
 
     private static func readMute(deviceID: AudioDeviceID, scope: AudioObjectPropertyScope) throws -> Bool {

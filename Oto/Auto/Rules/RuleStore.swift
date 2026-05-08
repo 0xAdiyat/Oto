@@ -10,9 +10,21 @@ final class RuleStore {
     private(set) var profiles: [Profile] = []
     var activeProfileID: UUID? = nil { didSet { saveProfiles() } }
 
+    /// Undo manager for rule mutations. Public so views can wire
+    /// `canUndo`/`canRedo` and trigger undo/redo from a global shortcut.
+    /// We keep a per-store manager (rather than the window's) because the
+    /// spotlight panel is borderless and AppKit doesn't propagate an
+    /// implicit `UndoManager` to that window — we control everything
+    /// through an explicit instance.
+    @ObservationIgnored let undoManager: UndoManager = {
+        let m = UndoManager()
+        m.levelsOfUndo = 32 // bounded — rule edits are infrequent and small
+        return m
+    }()
+
     /// Bump this when changing the Rule schema. Old data is migrated
     /// in `migrateIfNeeded(from:)`.
-    private static let currentSchemaVersion = 3
+    private static let currentSchemaVersion = 4
 
     private let rulesKey = "Oto.rules.v1"
     private let versionKey = "Oto.rules.schemaVersion"
@@ -30,38 +42,108 @@ final class RuleStore {
     // MARK: - Rules
 
     func add(_ rule: Rule) {
+        // Register the inverse *before* mutating so the user-visible action
+        // name groups correctly. Inside the undo block we call back into
+        // the public delete API, which itself registers a redo (Cocoa's
+        // UndoManager treats undo-of-undo as redo automatically).
+        let snapshot = rule
+        undoManager.registerUndo(withTarget: self) { target in
+            target.delete(snapshot)
+        }
+        undoManager.setActionName("Add Rule")
         rules.append(rule)
         save()
     }
 
     func update(_ rule: Rule) {
         guard let idx = rules.firstIndex(where: { $0.id == rule.id }) else { return }
+        let previous = rules[idx]
+        undoManager.registerUndo(withTarget: self) { target in
+            target.update(previous)
+        }
+        undoManager.setActionName("Edit Rule")
         rules[idx] = rule
         save()
     }
 
     func delete(_ rule: Rule) {
-        rules.removeAll { $0.id == rule.id }
+        guard let idx = rules.firstIndex(where: { $0.id == rule.id }) else { return }
+        let snapshot = rules[idx]
+        let originalIndex = idx
+        undoManager.registerUndo(withTarget: self) { target in
+            target.insert(snapshot, at: originalIndex)
+        }
+        undoManager.setActionName("Delete Rule")
+        rules.remove(at: idx)
+        save()
+    }
+
+    /// Internal restore helper used by undo. Bypasses the auto-append
+    /// behaviour of `add()` so we put the rule back at its original index.
+    fileprivate func insert(_ rule: Rule, at index: Int) {
+        let clamped = max(0, min(rules.count, index))
+        undoManager.registerUndo(withTarget: self) { target in
+            target.delete(rule)
+        }
+        undoManager.setActionName("Delete Rule")
+        rules.insert(rule, at: clamped)
         save()
     }
 
     func toggle(_ rule: Rule) {
         var copy = rule
         copy.enabled.toggle()
+        // Use update() so the undo path is consistent — undoing a toggle
+        // should restore exactly the prior `enabled` value.
         update(copy)
+        // Override action name for clarity in the Edit menu.
+        undoManager.setActionName(copy.enabled ? "Enable Rule" : "Disable Rule")
     }
 
-    func duplicate(_ rule: Rule) {
-        let copy = Rule(trigger: rule.trigger, action: rule.action, enabled: rule.enabled, profileID: rule.profileID)
-        if let idx = rules.firstIndex(where: { $0.id == rule.id }) {
-            rules.insert(copy, at: idx + 1)
-        } else {
-            rules.append(copy)
+    /// Sets `enabled` on every rule at once. Persists a single undo entry
+    /// for the whole batch (snapshot-restore) instead of one per rule —
+    /// users expect "Undo Pause All" to flip everything back in one step.
+    /// No-ops when no rule's state would change, so the chip's secondary
+    /// click on an already-fully-paused list doesn't pollute the undo
+    /// stack with a redundant entry.
+    func setAllRulesEnabled(_ enabled: Bool) {
+        let willMutate = rules.contains { $0.enabled != enabled }
+        guard willMutate else { return }
+        let snapshot = rules
+        undoManager.registerUndo(withTarget: self) { target in
+            target.replaceAll(with: snapshot, actionName: enabled ? "Resume All Rules" : "Pause All Rules")
+        }
+        undoManager.setActionName(enabled ? "Resume All Rules" : "Pause All Rules")
+        for i in rules.indices {
+            rules[i].enabled = enabled
         }
         save()
     }
 
+    func duplicate(_ rule: Rule) {
+        let copy = Rule(trigger: rule.trigger, action: rule.action, enabled: rule.enabled, profileID: rule.profileID)
+        let insertionIndex: Int
+        if let idx = rules.firstIndex(where: { $0.id == rule.id }) {
+            insertionIndex = idx + 1
+        } else {
+            insertionIndex = rules.count
+        }
+        undoManager.registerUndo(withTarget: self) { target in
+            target.delete(copy)
+        }
+        undoManager.setActionName("Duplicate Rule")
+        rules.insert(copy, at: insertionIndex)
+        save()
+    }
+
     func move(fromOffsets source: IndexSet, toOffset destination: Int) {
+        // Snapshot the full ordering before mutating so undo is a single
+        // assignment, not a reverse-engineered set of moves.
+        let before = rules
+        undoManager.registerUndo(withTarget: self) { target in
+            target.replaceAll(with: before, actionName: "Move Rule")
+        }
+        undoManager.setActionName("Move Rule")
         // Manual reorder so we don't have to import SwiftUI here.
         let sortedSrc = source.sorted()
         let moving = sortedSrc.map { rules[$0] }
@@ -70,6 +152,18 @@ final class RuleStore {
         // Adjust destination for items removed before it.
         let adjustedDest = destination - sortedSrc.filter { $0 < destination }.count
         rules.insert(contentsOf: moving, at: max(0, min(rules.count, adjustedDest)))
+        save()
+    }
+
+    /// Internal helper — replaces the entire rule array atomically and
+    /// registers the inverse so undo→redo works for ordering changes.
+    fileprivate func replaceAll(with newRules: [Rule], actionName: String) {
+        let before = rules
+        undoManager.registerUndo(withTarget: self) { target in
+            target.replaceAll(with: before, actionName: actionName)
+        }
+        undoManager.setActionName(actionName)
+        rules = newRules
         save()
     }
 
@@ -187,6 +281,11 @@ final class RuleStore {
         if oldVersion < 3 {
             migrateProfileIconsToLucide()
         }
+        // v3 → v4: added `appLaunches` trigger, `setOutputVolume` action,
+        // and optional `condition` field. All additive — Codable's
+        // optional handling lets existing v3 JSON decode unchanged. No
+        // payload rewrite needed; we just bump the version stamp so any
+        // future migration knows where the data came from.
         UserDefaults.standard.set(Self.currentSchemaVersion, forKey: versionKey)
     }
 

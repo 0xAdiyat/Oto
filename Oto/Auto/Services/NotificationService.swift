@@ -37,4 +37,20 @@ final class NotificationService {
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
     }
+
+    /// Posts a notice that the quiet-hours guardrail clamped the user's
+    /// volume. Separate from `notifyRuleFired` because this isn't a rule
+    /// firing — it's a continuous safety net the user opted in to.
+    func notifyQuietHoursClamped(cappedPercent: Int, attemptedPercent: Int) {
+        guard enabled else { return }
+        requestAuthorizationIfNeeded()
+
+        let content = UNMutableNotificationContent()
+        content.title = "Quiet hours"
+        content.body = "Volume capped at \(cappedPercent)% (was \(attemptedPercent)%)."
+        content.sound = nil // intentionally silent — this is a "shh" moment
+
+        let request = UNNotificationRequest(identifier: "Oto.quietHours", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
+    }
 }

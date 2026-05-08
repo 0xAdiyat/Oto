@@ -158,6 +158,35 @@ extension View {
     }
 }
 
+// MARK: - Custom dismiss environment
+
+/// Callable struct that mirrors SwiftUI's `DismissAction` so existing sheet
+/// view code (`@Environment(\.dismiss); dismiss()`) can be migrated by
+/// changing one line per call site (`\.otoDismiss` instead of `\.dismiss`).
+///
+/// Why a custom value: the spotlight panel is a borderless transparent
+/// NSPanel, and the system `.sheet` modifier dims the parent window with a
+/// hard-edged rectangular overlay that doesn't conform to the panel's
+/// rounded corners — visually broken. We replace `.sheet` with an in-panel
+/// overlay (see `MainWindowView`), which means SwiftUI's built-in
+/// `\.dismiss` no longer flows into our sheets. This env value carries our
+/// closure-based dismiss in its place.
+struct OtoDismissAction {
+    let action: () -> Void
+    func callAsFunction() { action() }
+}
+
+private struct OtoDismissKey: EnvironmentKey {
+    static let defaultValue = OtoDismissAction(action: {})
+}
+
+extension EnvironmentValues {
+    var otoDismiss: OtoDismissAction {
+        get { self[OtoDismissKey.self] }
+        set { self[OtoDismissKey.self] = newValue }
+    }
+}
+
 // MARK: - AppKit focus-ring suppression
 
 /// Invisible NSViewRepresentable that, once mounted into a SwiftUI hierarchy,

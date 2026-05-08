@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ProfilesSheet: View {
     @Environment(AppState.self) private var state
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.otoDismiss) private var dismiss
 
     @State private var newName: String = ""
     @State private var newIcon: String = "square.grid.2x2"

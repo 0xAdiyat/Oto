@@ -22,6 +22,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             rootView: MainWindowView().environment(state)
         )
 
+        // Wire the optional global hotkey: when fired, toggle the spotlight
+        // panel. The manager singleton self-restores any persisted shortcut
+        // on init, so by this point registration has already been attempted.
+        GlobalHotkeyManager.shared.onFire = {
+            SpotlightWindowController.shared.toggle()
+        }
+
         // First-run welcome: auto-present the main window the very first time
         // Oto launches so users discover it isn't trapped in the menu bar.
         // Persisted in UserDefaults — uninstalling/reinstalling clears the
@@ -60,5 +67,13 @@ struct OtoApp: App {
                 .frame(width: 16, height: 16)
         }
         .menuBarExtraStyle(.window)
+
+        // Standard macOS Preferences window. Discoverable through the App
+        // menu (⌘,) and via `openSettings` from anywhere in the UI. Lives
+        // alongside MenuBarExtra without forcing a Dock icon.
+        Settings {
+            OtoSettingsView()
+                .environment(appDelegate.state)
+        }
     }
 }

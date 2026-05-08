@@ -12,16 +12,27 @@ final class AudioDeviceMonitor {
 
     var allDevices: [AudioDevice] = []
     var defaultInputDevice: AudioDevice?
+    var defaultOutputDevice: AudioDevice?
 
     @ObservationIgnored let deviceConnected = PassthroughSubject<AudioDevice, Never>()
     @ObservationIgnored let deviceDisconnected = PassthroughSubject<AudioDevice, Never>()
+    /// Fires whenever the system default output device changes — including
+    /// when macOS auto-routes output to a freshly-connected Bluetooth device.
+    /// Consumers that want to *resist* macOS's choice (DeviceLockManager,
+    /// future per-app routing) subscribe here.
+    @ObservationIgnored let defaultOutputChanged = PassthroughSubject<AudioDevice?, Never>()
+    /// Fires whenever the system default input device changes. Same use case
+    /// as `defaultOutputChanged` but for the input direction.
+    @ObservationIgnored let defaultInputChanged = PassthroughSubject<AudioDevice?, Never>()
 
     @ObservationIgnored nonisolated(unsafe) private var devicesListenerInstalled = false
     @ObservationIgnored nonisolated(unsafe) private var defaultInputListenerInstalled = false
+    @ObservationIgnored nonisolated(unsafe) private var defaultOutputListenerInstalled = false
 
     init() {
         allDevices = Self.fetchAllDevices()
         defaultInputDevice = Self.fetchDefaultInputDevice()
+        defaultOutputDevice = Self.fetchDefaultOutputDevice()
         installListeners()
     }
 
@@ -56,8 +67,16 @@ final class AudioDeviceMonitor {
     }
 
     private nonisolated static func fetchDefaultInputDevice() -> AudioDevice? {
+        fetchDefaultDevice(selector: kAudioHardwarePropertyDefaultInputDevice)
+    }
+
+    private nonisolated static func fetchDefaultOutputDevice() -> AudioDevice? {
+        fetchDefaultDevice(selector: kAudioHardwarePropertyDefaultOutputDevice)
+    }
+
+    private nonisolated static func fetchDefaultDevice(selector: AudioObjectPropertySelector) -> AudioDevice? {
         var address = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultInputDevice,
+            mSelector: selector,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
@@ -102,6 +121,20 @@ final class AudioDeviceMonitor {
         ) == noErr {
             defaultInputListenerInstalled = true
         }
+
+        var outputAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        if AudioObjectAddPropertyListener(
+            AudioObjectID(kAudioObjectSystemObject),
+            &outputAddress,
+            onDefaultOutputChanged,
+            selfPtr
+        ) == noErr {
+            defaultOutputListenerInstalled = true
+        }
     }
 
     private nonisolated func removeListeners() {
@@ -128,6 +161,17 @@ final class AudioDeviceMonitor {
                 AudioObjectID(kAudioObjectSystemObject), &address, onDefaultInputChanged, selfPtr
             )
         }
+
+        if defaultOutputListenerInstalled {
+            var address = AudioObjectPropertyAddress(
+                mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            AudioObjectRemovePropertyListener(
+                AudioObjectID(kAudioObjectSystemObject), &address, onDefaultOutputChanged, selfPtr
+            )
+        }
     }
 
     // MARK: - Callback Handlers (called from CoreAudio thread)
@@ -146,6 +190,7 @@ final class AudioDeviceMonitor {
 
             self.allDevices = newDevices
             self.defaultInputDevice = Self.fetchDefaultInputDevice()
+            self.defaultOutputDevice = Self.fetchDefaultOutputDevice()
 
             for device in connected { self.deviceConnected.send(device) }
             for device in disconnected { self.deviceDisconnected.send(device) }
@@ -156,7 +201,19 @@ final class AudioDeviceMonitor {
         let newDefault = Self.fetchDefaultInputDevice()
 
         DispatchQueue.main.async { [weak self] in
-            self?.defaultInputDevice = newDefault
+            guard let self else { return }
+            self.defaultInputDevice = newDefault
+            self.defaultInputChanged.send(newDefault)
+        }
+    }
+
+    fileprivate nonisolated func handleDefaultOutputChanged() {
+        let newDefault = Self.fetchDefaultOutputDevice()
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.defaultOutputDevice = newDefault
+            self.defaultOutputChanged.send(newDefault)
         }
     }
 }
@@ -182,5 +239,16 @@ private nonisolated func onDefaultInputChanged(
 ) -> OSStatus {
     guard let clientData else { return noErr }
     Unmanaged<AudioDeviceMonitor>.fromOpaque(clientData).takeUnretainedValue().handleDefaultInputChanged()
+    return noErr
+}
+
+private nonisolated func onDefaultOutputChanged(
+    _ objectID: AudioObjectID,
+    _ count: UInt32,
+    _ addresses: UnsafePointer<AudioObjectPropertyAddress>,
+    _ clientData: UnsafeMutableRawPointer?
+) -> OSStatus {
+    guard let clientData else { return noErr }
+    Unmanaged<AudioDeviceMonitor>.fromOpaque(clientData).takeUnretainedValue().handleDefaultOutputChanged()
     return noErr
 }

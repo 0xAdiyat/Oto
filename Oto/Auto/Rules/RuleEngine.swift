@@ -6,6 +6,7 @@ import Foundation
 final class RuleEngine {
     private weak var monitor: AudioDeviceMonitor?
     private weak var store: RuleStore?
+    private weak var appMonitor: AppLaunchMonitor?
     private var cancellables = Set<AnyCancellable>()
 
     /// Debounce window: ignore repeat fires for the same rule within this many seconds.
@@ -20,9 +21,10 @@ final class RuleEngine {
     /// not before (which would let macOS win the race and override our choice).
     private let bluetoothSettleDelay: TimeInterval = 1.5
 
-    init(monitor: AudioDeviceMonitor, store: RuleStore) {
+    init(monitor: AudioDeviceMonitor, store: RuleStore, appMonitor: AppLaunchMonitor) {
         self.monitor = monitor
         self.store = store
+        self.appMonitor = appMonitor
 
         monitor.deviceConnected
             .receive(on: DispatchQueue.main)
@@ -32,6 +34,11 @@ final class RuleEngine {
         monitor.deviceDisconnected
             .receive(on: DispatchQueue.main)
             .sink { [weak self] device in self?.handleDisconnected(device) }
+            .store(in: &cancellables)
+
+        appMonitor.appLaunched
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] app in self?.handleAppLaunched(app) }
             .store(in: &cancellables)
 
         NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification, object: nil)
@@ -88,6 +95,16 @@ final class RuleEngine {
         runBatch(matches)
     }
 
+    private func handleAppLaunched(_ app: LaunchedApp) {
+        let matches = matchingRules { trigger in
+            if case .appLaunches(let bundleID, _) = trigger, bundleID == app.bundleID {
+                return true
+            }
+            return false
+        }
+        runBatch(matches)
+    }
+
     private func matchingRules(_ predicate: (RuleTrigger) -> Bool) -> [Rule] {
         guard let store else { return [] }
         let activeProfileID = store.activeProfileID
@@ -95,7 +112,23 @@ final class RuleEngine {
             guard rule.enabled else { return false }
             // Profile filter: nil profileID = always-on; otherwise match active profile.
             if let rp = rule.profileID, rp != activeProfileID { return false }
-            return predicate(rule.trigger)
+            guard predicate(rule.trigger) else { return false }
+            // Conditions are evaluated at fire time, not at trigger time —
+            // headphones may have connected after the trigger was wired up.
+            if let cond = rule.condition, !evaluate(condition: cond) { return false }
+            return true
+        }
+    }
+
+    /// Evaluates a `RuleCondition` against current device state. Pure read,
+    /// no side effects.
+    private func evaluate(condition: RuleCondition) -> Bool {
+        guard let monitor else { return false }
+        switch condition {
+        case .headphonesNotConnected:
+            return !monitor.allDevices.contains(where: { $0.isHeadphoneOutput })
+        case .headphonesConnected:
+            return monitor.allDevices.contains(where: { $0.isHeadphoneOutput })
         }
     }
 
@@ -182,6 +215,21 @@ final class RuleEngine {
                 return ApplyResult(kind: .applied, deviceName: target.name)
             } catch {
                 NSLog("Oto: setInputVolume failed: \(error)")
+                return ApplyResult(kind: .failed, deviceName: target.name)
+            }
+
+        case .setOutputVolume(let v):
+            // Operate on whatever output device is currently default. Falls
+            // back to "targetMissing" if there is no default — uncommon but
+            // possible during boot or while macOS is mid-route.
+            guard let target = monitor.defaultOutputDevice else {
+                return ApplyResult(kind: .targetMissing, deviceName: nil)
+            }
+            do {
+                try AudioDeviceVolume.setOutputVolume(target, volume: v)
+                return ApplyResult(kind: .applied, deviceName: "\(target.name) → \(Int(v * 100))%")
+            } catch {
+                NSLog("Oto: setOutputVolume failed: \(error)")
                 return ApplyResult(kind: .failed, deviceName: target.name)
             }
 

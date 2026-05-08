@@ -1,12 +1,11 @@
 import SwiftUI
-import UserNotifications
 import AppKit
 
 // MARK: - DevicesSheet
 
 struct DevicesSheet: View {
     @Environment(AppState.self) private var state
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.otoDismiss) private var dismiss
 
     var inputs: [AudioDevice] { state.monitor.allDevices.filter(\.hasInput) }
     var outputs: [AudioDevice] { state.monitor.allDevices.filter(\.hasOutput) }
@@ -73,7 +72,11 @@ struct DevicesSheet: View {
     }
 
     private func deviceRow(_ device: AudioDevice, isInput: Bool) -> some View {
-        let isCurrentInput = isInput && device.uid == state.monitor.defaultInputDevice?.uid
+        let direction: DeviceLockManager.Direction = isInput ? .input : .output
+        let isCurrent = isInput
+            ? device.uid == state.monitor.defaultInputDevice?.uid
+            : device.uid == state.monitor.defaultOutputDevice?.uid
+        let isLocked = state.deviceLock.isLocked(device, direction: direction)
         let tint = device.displayTint
         return HStack(spacing: 12) {
             OtoIcon(name: device.kind.systemImage, size: 18)
@@ -86,8 +89,18 @@ struct DevicesSheet: View {
                 .foregroundStyle(tint)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(device.name)
-                    .font(.system(size: 14, weight: .medium))
+                HStack(spacing: 6) {
+                    Text(device.name)
+                        .font(.system(size: 14, weight: .medium))
+                    if isLocked {
+                        OtoIcon(name: "lock.fill", size: 11)
+                            .foregroundStyle(Color.otoTeal)
+                            .help(isInput
+                                  ? "Locked as default input — Oto will re-pin if macOS changes it."
+                                  : "Locked as default output — Oto will re-pin if macOS changes it.")
+                            .accessibilityLabel("Locked as default")
+                    }
+                }
                 Text(device.kind.label)
                     .font(.system(size: 12))
                     .foregroundStyle(OtoUI.mutedFG)
@@ -95,23 +108,40 @@ struct DevicesSheet: View {
 
             Spacer()
 
-            if isInput {
-                if isCurrentInput {
-                    Text("Active")
-                        .font(.system(size: 11, weight: .bold))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Color.otoTeal.opacity(0.18), in: Capsule())
-                        .foregroundStyle(Color.otoTeal)
-                } else {
-                    Button("Make Default") { state.switchTo(device) }
-                        .controlSize(.small)
-                        .buttonStyle(.bordered)
+            // Lock toggle — small icon button. Hidden for input devices that
+            // can't be input (and likewise for output) so users can't lock a
+            // direction the device doesn't support.
+            let canLock = isInput ? device.hasInput : device.hasOutput
+            if canLock {
+                Button {
+                    state.deviceLock.toggleLock(device, direction: direction)
+                } label: {
+                    OtoIcon(name: isLocked ? "lock.fill" : "lock.open", size: 13)
+                        .frame(width: 26, height: 26)
+                        .foregroundStyle(isLocked ? Color.otoTeal : OtoUI.mutedFG)
                 }
+                .buttonStyle(.plain)
+                .help(isLocked ? "Unlock — let macOS choose freely" : "Lock as default — Oto re-asserts on every change")
+                .accessibilityLabel(isLocked ? "Unlock device" : "Lock as default")
+            }
+
+            if isCurrent {
+                Text("Active")
+                    .font(.system(size: 11, weight: .bold))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.otoTeal.opacity(0.18), in: Capsule())
+                    .foregroundStyle(Color.otoTeal)
             } else {
-                Button("Make Default") { try? AudioDeviceSwitcher.setDefaultOutput(device) }
-                    .controlSize(.small)
-                    .buttonStyle(.bordered)
+                Button("Make Default") {
+                    if isInput {
+                        state.switchTo(device)
+                    } else {
+                        try? AudioDeviceSwitcher.setDefaultOutput(device)
+                    }
+                }
+                .controlSize(.small)
+                .buttonStyle(.bordered)
             }
         }
         .padding(.horizontal, 12)
@@ -120,87 +150,22 @@ struct DevicesSheet: View {
     }
 }
 
-// MARK: - SettingsSheet
-
-struct SettingsSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var launchAtLogin: Bool = LaunchAtLogin.isEnabled
-    @AppStorage("Oto.showNotifications") private var showNotifications = true
-    @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("Settings")
-                .font(.system(size: OtoUI.titleSize, weight: .semibold))
-
-            VStack(spacing: 0) {
-                FormRow(label: "Launch") {
-                    Toggle("Launch Oto at login", isOn: $launchAtLogin)
-                        .toggleStyle(.switch)
-                        .tint(.otoTeal)
-                        .onChange(of: launchAtLogin) { _, newValue in
-                            LaunchAtLogin.setEnabled(newValue)
-                            launchAtLogin = LaunchAtLogin.isEnabled
-                        }
-                }
-
-                FormRow(label: "Notify", isLast: true) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Toggle("Notify when input switches", isOn: $showNotifications)
-                            .toggleStyle(.switch)
-                            .tint(.otoTeal)
-                            .onChange(of: showNotifications) { _, newValue in
-                                if newValue {
-                                    NotificationService.shared.requestAuthorizationIfNeeded()
-                                    Task { notificationStatus = await NotificationService.shared.authorizationStatus() }
-                                }
-                            }
-                            .disabled(notificationStatus == .denied)
-
-                        if notificationStatus == .denied && showNotifications {
-                            HStack(spacing: 8) {
-                                OtoIcon(name: "exclamationmark.triangle", size: 13)
-                                    .foregroundStyle(Color.otoYellow)
-                                Text("Notifications are disabled in System Settings.")
-                                    .font(.system(size: 11))
-                                    .foregroundStyle(OtoUI.mutedFG)
-                                Button("Open Settings") {
-                                    if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
-                                        NSWorkspace.shared.open(url)
-                                    }
-                                }
-                                .controlSize(.mini)
-                                .buttonStyle(.bordered)
-                            }
-                        }
-                    }
-                }
-            }
-
-            HStack {
-                Spacer()
-                Button("Done") { dismiss() }
-                    .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
-                    .tint(.otoTeal)
-            }
-        }
-        .padding(26)
-        .frame(width: 480)
-        .materialPanel()
-        .focusEffectDisabled()
-        .suppressAppKitFocusRings()
-        .onAppear {
-            launchAtLogin = LaunchAtLogin.isEnabled
-            Task { notificationStatus = await NotificationService.shared.authorizationStatus() }
-        }
-    }
-}
-
 // MARK: - AboutSheet
 
 struct AboutSheet: View {
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.otoDismiss) private var dismiss
+
+    /// Pulled from Info.plist so a release-build version bump propagates
+    /// without touching this file. Falls back gracefully in the rare case
+    /// either key is absent (e.g. running unit-test bundles).
+    private var versionString: String {
+        let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
+        let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String
+        if let b, b != v { return "v\(v) (\(b))" }
+        return "v\(v)"
+    }
+
+    private static let repoURL = URL(string: "https://github.com/0xadiyat/oto")!
 
     var body: some View {
         VStack(spacing: 14) {
@@ -212,7 +177,7 @@ struct AboutSheet: View {
                 .resizable()
                 .scaledToFit()
                 .frame(height: 28)
-            Text("v1.0.0")
+            Text(versionString)
                 .font(.system(size: 12))
                 .foregroundStyle(OtoUI.mutedFG)
             Text("Automatic audio input switching for macOS.")
@@ -220,22 +185,53 @@ struct AboutSheet: View {
                 .foregroundStyle(OtoUI.mutedFG)
                 .multilineTextAlignment(.center)
                 .padding(.top, 4)
-            Text("Tip: install Oto in /Applications and avoid moving it later — login-at-startup tracks the bundle path.")
-                .font(.system(size: 11))
-                .foregroundStyle(OtoUI.mutedFG.opacity(0.8))
+
+            // Repo link — `Link` rather than `Button { NSWorkspace.open }`
+            // so VoiceOver announces "link" and the user's default browser
+            // opens cleanly. Lucide github mark mounted as a template image
+            // so it tints to the current foreground colour.
+            Link(destination: Self.repoURL) {
+                HStack(spacing: 6) {
+                    Image("github")
+                        .renderingMode(.template)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 14, height: 14)
+                    Text("View on GitHub")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(OtoUI.rowIdle, in: Capsule())
+                .overlay {
+                    Capsule().strokeBorder(OtoUI.dividerColor, lineWidth: 1)
+                }
+                .foregroundStyle(OtoUI.secondaryFG)
+            }
+            .buttonStyle(.plain)
+            .help("github.com/0xadiyat/oto")
+            .accessibilityLabel("View Oto on GitHub")
+            .padding(.top, 6)
+
+            Spacer(minLength: 0)
+
+            // Standard macOS About-window copyright — same one-line format
+            // Apple uses (e.g. "Copyright © 2026 Apple Inc.") so this reads
+            // as native to anyone who's seen `About this Mac`.
+            Text("Copyright © 2026 0xAdiyat. All rights reserved.")
+                .font(.system(size: 10))
+                .foregroundStyle(OtoUI.mutedFG.opacity(0.85))
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: 320)
-                .padding(.top, 14)
 
             Button("Close") { dismiss() }
                 .keyboardShortcut(.defaultAction)
                 .buttonStyle(.borderedProminent)
                 .tint(.otoTeal)
-                .padding(.top, 8)
+                .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
         .padding(28)
-        .frame(width: 420, height: 360)
+        .frame(width: 420, height: 400)
         .materialPanel()
         .focusEffectDisabled()
         .suppressAppKitFocusRings()

@@ -44,6 +44,27 @@ enum AudioDeviceKind {
 }
 
 extension AudioDevice {
+    /// True for any device a user would call "headphones" — covers AirPods,
+    /// over-ear Bluetooth cans, and the wired-headphones-on-built-in case
+    /// (where macOS still reports built-in transport but a separate device
+    /// kind). Used by the `headphonesNotConnected` rule condition.
+    ///
+    /// Why output-only: an external mic that ships with headphones (e.g.
+    /// AirPods mic) does not protect built-in speakers from blasting music.
+    /// Only the *output* path matters for the safety guarantee.
+    var isHeadphoneOutput: Bool {
+        guard hasOutput else { return false }
+        switch kind {
+        case .airPods, .headphones: return true
+        case .bluetooth:
+            // Bluetooth speakers also live here; a name heuristic is the
+            // only practical signal short of probing AVB descriptors.
+            let lower = name.lowercased()
+            return !(lower.contains("speaker") || lower.contains("hifi") || lower.contains("homepod"))
+        case .builtIn, .usb, .other: return false
+        }
+    }
+
     var kind: AudioDeviceKind {
         let transport = transportType
         switch transport {

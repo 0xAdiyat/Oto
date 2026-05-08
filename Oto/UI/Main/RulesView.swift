@@ -21,6 +21,16 @@ struct RulesPanel: View {
         }
     }
 
+    /// Rule IDs that participate in a runtime conflict under the current
+    /// active profile. Used to badge rows. Profile-aware so a Work-only
+    /// duplicate doesn't get flagged while Home is active.
+    private var conflictingIDs: Set<UUID> {
+        RuleConflicts.conflictingRuleIDs(
+            in: state.store.rules,
+            activeProfileID: state.store.activeProfileID
+        )
+    }
+
     var body: some View {
         Group {
             if state.store.rules.isEmpty {
@@ -46,7 +56,11 @@ struct RulesPanel: View {
         ScrollView {
             LazyVStack(spacing: 0) {
                 ForEach(filter == .all ? state.store.rules : filteredRules) { rule in
-                    RuleRow(rule: rule, onEdit: { onEdit(rule) })
+                    RuleRow(
+                        rule: rule,
+                        hasConflict: conflictingIDs.contains(rule.id),
+                        onEdit: { onEdit(rule) }
+                    )
                         .contextMenu {
                             Button("Edit") { onEdit(rule) }
                             Button("Duplicate") { state.store.duplicate(rule) }
@@ -88,6 +102,7 @@ struct RulesPanel: View {
 struct RuleRow: View {
     @Environment(AppState.self) private var state
     let rule: Rule
+    var hasConflict: Bool = false
     let onEdit: () -> Void
 
     @State private var isHovering = false
@@ -102,7 +117,7 @@ struct RuleRow: View {
             return "When \(resolvedName(uid: uid, fallback: name)) connects"
         case .deviceDisconnects(let uid, let name):
             return "When \(resolvedName(uid: uid, fallback: name)) disconnects"
-        case .anyBluetoothConnects, .systemWakes:
+        case .anyBluetoothConnects, .systemWakes, .appLaunches:
             return rule.trigger.displayText
         }
     }
@@ -138,6 +153,7 @@ struct RuleRow: View {
             return .otoTeal
         case .anyBluetoothConnects: return .otoNavy
         case .systemWakes:          return .otoYellow
+        case .appLaunches:          return .otoSage
         }
     }
 
@@ -157,6 +173,7 @@ struct RuleRow: View {
             if lower.contains("macbook") || lower.contains("built-in") { return .otoYellow }
             if lower.contains("fifine")   { return .otoTeal }
             return .otoTeal
+        case .setOutputVolume: return .otoYellow
         default: return .otoTeal
         }
     }
@@ -166,10 +183,18 @@ struct RuleRow: View {
             triggerTile
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(triggerDisplayText)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(triggerDisplayText)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    if hasConflict && rule.enabled {
+                        OtoIcon(name: "exclamationmark.triangle.fill", size: 11)
+                            .foregroundStyle(Color.otoYellow)
+                            .help("This rule conflicts with another rule. Only one will fire — open the editor to resolve.")
+                            .accessibilityLabel("Conflict warning")
+                    }
+                }
                 HStack(spacing: 4) {
                     OtoIcon(name: "arrow.right", size: 10)
                         .foregroundStyle(OtoUI.mutedFG)
@@ -266,6 +291,8 @@ struct RuleRow: View {
             return ("wave.3.right", "Bluetooth connects")
         case .systemWakes:
             return ("power", "System wakes")
+        case .appLaunches:
+            return ("app.dashed", "App launches")
         }
     }
 
@@ -284,23 +311,27 @@ struct RuleRow: View {
 
 struct RuleEditorSheet: View {
     @Environment(AppState.self) private var state
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.otoDismiss) private var dismiss
 
     let existing: Rule?
 
     @State private var triggerKind: TriggerKind = .deviceConnects
     @State private var triggerDeviceUID: String = ""
     @State private var triggerDeviceName: String = ""
+    @State private var triggerAppBundleID: String = ""
+    @State private var triggerAppName: String = ""
     @State private var actionKind: ActionKind = .setInput
     @State private var inputDeviceUID: String = ""
     @State private var inputDeviceName: String = ""
     @State private var outputDeviceUID: String = ""
     @State private var outputDeviceName: String = ""
     @State private var volume: Double = 0.5
+    @State private var outputVolume: Double = 0.4
     @State private var profileID: UUID? = nil
+    @State private var conditionKind: ConditionKind = .none
 
     enum TriggerKind: String, CaseIterable, Identifiable {
-        case deviceConnects, deviceDisconnects, anyBluetooth, systemWakes
+        case deviceConnects, deviceDisconnects, anyBluetooth, systemWakes, appLaunches
         var id: String { rawValue }
         var label: String {
             switch self {
@@ -308,12 +339,13 @@ struct RuleEditorSheet: View {
             case .deviceDisconnects: return "When device disconnects"
             case .anyBluetooth: return "When any Bluetooth connects"
             case .systemWakes: return "When system wakes up"
+            case .appLaunches: return "When app launches"
             }
         }
     }
 
     enum ActionKind: String, CaseIterable, Identifiable {
-        case setInput, setOutput, setBoth, setInputVolume, toggleInputMute, keepCurrent
+        case setInput, setOutput, setBoth, setInputVolume, setOutputVolume, toggleInputMute, keepCurrent
         var id: String { rawValue }
         var label: String {
             switch self {
@@ -321,8 +353,38 @@ struct RuleEditorSheet: View {
             case .setOutput: return "Set output to"
             case .setBoth: return "Set input + output"
             case .setInputVolume: return "Set input volume"
+            case .setOutputVolume: return "Set output volume"
             case .toggleInputMute: return "Toggle input mute"
             case .keepCurrent: return "Keep current input"
+            }
+        }
+    }
+
+    /// UI-only enum that round-trips to `RuleCondition?`. The "none" case
+    /// keeps the picker tidy — users see "No extra condition" as a first-
+    /// class option rather than a disable-the-field-and-leave-it-blank UX.
+    enum ConditionKind: String, CaseIterable, Identifiable {
+        case none, headphonesNotConnected, headphonesConnected
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .none: return "No extra condition"
+            case .headphonesNotConnected: return "Only when headphones aren't connected"
+            case .headphonesConnected: return "Only when headphones are connected"
+            }
+        }
+        var domain: RuleCondition? {
+            switch self {
+            case .none: return nil
+            case .headphonesNotConnected: return .headphonesNotConnected
+            case .headphonesConnected: return .headphonesConnected
+            }
+        }
+        init(_ condition: RuleCondition?) {
+            switch condition {
+            case .none: self = .none
+            case .headphonesNotConnected: self = .headphonesNotConnected
+            case .headphonesConnected: self = .headphonesConnected
             }
         }
     }
@@ -331,6 +393,10 @@ struct RuleEditorSheet: View {
         VStack(alignment: .leading, spacing: 18) {
             Text(existing == nil ? "New rule" : "Edit rule")
                 .font(.system(size: OtoUI.titleSize, weight: .semibold))
+
+            if let warning = conflictWarning {
+                conflictBanner(message: warning)
+            }
 
             VStack(spacing: 0) {
                 FormRow(label: "Trigger") {
@@ -352,6 +418,12 @@ struct RuleEditorSheet: View {
                         .onChange(of: triggerDeviceUID) { _, newValue in
                             triggerDeviceName = state.monitor.allDevices.first(where: { $0.uid == newValue })?.name ?? triggerDeviceName
                         }
+                    }
+                }
+
+                if triggerKind == .appLaunches {
+                    FormRow(label: "App") {
+                        appPicker
                     }
                 }
 
@@ -380,8 +452,25 @@ struct RuleEditorSheet: View {
                                 .foregroundStyle(OtoUI.mutedFG)
                         }
                     }
+                case .setOutputVolume:
+                    FormRow(label: "Volume") {
+                        HStack {
+                            Slider(value: $outputVolume, in: 0...1)
+                            Text("\(Int(outputVolume * 100))%")
+                                .monospacedDigit()
+                                .frame(width: 44, alignment: .trailing)
+                                .foregroundStyle(OtoUI.mutedFG)
+                        }
+                    }
                 case .toggleInputMute, .keepCurrent:
                     EmptyView()
+                }
+
+                FormRow(label: "Condition") {
+                    Picker("", selection: $conditionKind) {
+                        ForEach(ConditionKind.allCases) { c in Text(c.label).tag(c) }
+                    }
+                    .labelsHidden()
                 }
 
                 FormRow(label: "Profile", isLast: true) {
@@ -424,6 +513,39 @@ struct RuleEditorSheet: View {
         .onAppear(perform: hydrate)
     }
 
+    /// Picker that fuses two sources: well-known apps (always visible so
+    /// you can wire up Spotify even before launching it once this session)
+    /// and currently-running apps (so the UID and display name come from
+    /// the live `NSRunningApplication`). Duplicates collapse on bundleID.
+    @ViewBuilder
+    private var appPicker: some View {
+        Picker("", selection: $triggerAppBundleID) {
+            Text("Select app").tag("")
+
+            let combined: [LaunchedApp] = {
+                var seen = Set<String>()
+                var out: [LaunchedApp] = []
+                for app in WellKnownApps.suggestions + state.appLaunchMonitor.runningApps {
+                    if seen.insert(app.bundleID).inserted { out.append(app) }
+                }
+                return out.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            }()
+
+            ForEach(combined) { app in
+                Text(app.name).tag(app.bundleID)
+            }
+        }
+        .labelsHidden()
+        .onChange(of: triggerAppBundleID) { _, newValue in
+            // Refresh the cached display name from whichever source the
+            // user just picked. If the bundleID isn't currently running and
+            // isn't in the curated list, fall back to whatever name was
+            // already cached (covers the edit-existing-rule path).
+            let combined = WellKnownApps.suggestions + state.appLaunchMonitor.runningApps
+            triggerAppName = combined.first(where: { $0.bundleID == newValue })?.name ?? triggerAppName
+        }
+    }
+
     @ViewBuilder
     private var inputPicker: some View {
         FormRow(label: "Input") {
@@ -459,6 +581,7 @@ struct RuleEditorSheet: View {
     private func hydrate() {
         guard let r = existing else { return }
         profileID = r.profileID
+        conditionKind = ConditionKind(r.condition)
         switch r.trigger {
         case .deviceConnects(let uid, let name):
             triggerKind = .deviceConnects
@@ -468,6 +591,9 @@ struct RuleEditorSheet: View {
             triggerDeviceUID = uid; triggerDeviceName = name
         case .anyBluetoothConnects: triggerKind = .anyBluetooth
         case .systemWakes: triggerKind = .systemWakes
+        case .appLaunches(let bundleID, let name):
+            triggerKind = .appLaunches
+            triggerAppBundleID = bundleID; triggerAppName = name
         }
         switch r.action {
         case .setInput(let uid, let name):
@@ -480,6 +606,8 @@ struct RuleEditorSheet: View {
             outputDeviceUID = ou; outputDeviceName = oN
         case .setInputVolume(let v):
             actionKind = .setInputVolume; volume = v
+        case .setOutputVolume(let v):
+            actionKind = .setOutputVolume; outputVolume = v
         case .toggleInputMute: actionKind = .toggleInputMute
         case .keepCurrent: actionKind = .keepCurrent
         }
@@ -489,6 +617,8 @@ struct RuleEditorSheet: View {
         switch triggerKind {
         case .deviceConnects, .deviceDisconnects:
             if triggerDeviceUID.isEmpty { return false }
+        case .appLaunches:
+            if triggerAppBundleID.isEmpty { return false }
         case .anyBluetooth, .systemWakes: break
         }
         switch actionKind {
@@ -496,9 +626,55 @@ struct RuleEditorSheet: View {
         case .setOutput: if outputDeviceUID.isEmpty { return false }
         case .setBoth:
             if inputDeviceUID.isEmpty || outputDeviceUID.isEmpty { return false }
-        case .setInputVolume, .toggleInputMute, .keepCurrent: break
+        case .setInputVolume, .setOutputVolume, .toggleInputMute, .keepCurrent: break
         }
         return true
+    }
+
+    /// Re-evaluates conflicts as the user edits the form. Returns the
+    /// human-readable message shown in the banner, or nil when there's no
+    /// conflict (or when the form isn't yet valid enough to construct a
+    /// hypothetical rule).
+    private var conflictWarning: String? {
+        guard isValid, let candidate = buildRule() else { return nil }
+        // Build the "what the rules array would look like after Save" set —
+        // replacing the existing rule by id, or appending the candidate.
+        var hypothetical = state.store.rules
+        if let idx = hypothetical.firstIndex(where: { $0.id == candidate.id }) {
+            hypothetical[idx] = candidate
+        } else {
+            hypothetical.append(candidate)
+        }
+        let clusters = RuleConflicts.clusters(in: hypothetical, activeProfileID: profileID)
+        // Filter to clusters that actually include the candidate. If the
+        // candidate isn't part of any cluster, it isn't *introducing* a
+        // conflict — don't nag the user about pre-existing ones.
+        guard let cluster = clusters.first(where: { $0.ruleIDs.contains(candidate.id) }) else {
+            return nil
+        }
+        return cluster.explanation
+    }
+
+    private func conflictBanner(message: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            OtoIcon(name: "exclamationmark.triangle.fill", size: 14)
+                .foregroundStyle(Color.otoYellow)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Possible conflict")
+                    .font(.system(size: 12, weight: .semibold))
+                Text(message)
+                    .font(.system(size: 11))
+                    .foregroundStyle(OtoUI.mutedFG)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(Color.otoYellow.opacity(0.10), in: RoundedRectangle(cornerRadius: OtoUI.chipRadius))
+        .overlay {
+            RoundedRectangle(cornerRadius: OtoUI.chipRadius)
+                .strokeBorder(Color.otoYellow.opacity(0.35), lineWidth: 1)
+        }
     }
 
     private func buildRule() -> Rule? {
@@ -512,6 +688,10 @@ struct RuleEditorSheet: View {
             trigger = .deviceDisconnects(deviceUID: triggerDeviceUID, deviceName: name)
         case .anyBluetooth: trigger = .anyBluetoothConnects
         case .systemWakes: trigger = .systemWakes
+        case .appLaunches:
+            let combined = WellKnownApps.suggestions + state.appLaunchMonitor.runningApps
+            let name = combined.first(where: { $0.bundleID == triggerAppBundleID })?.name ?? triggerAppName
+            trigger = .appLaunches(bundleID: triggerAppBundleID, appName: name)
         }
         let action: RuleAction
         switch actionKind {
@@ -527,15 +707,29 @@ struct RuleEditorSheet: View {
             action = .setBoth(inputUID: inputDeviceUID, inputName: inName, outputUID: outputDeviceUID, outputName: outName)
         case .setInputVolume:
             action = .setInputVolume(volume: volume)
+        case .setOutputVolume:
+            action = .setOutputVolume(volume: outputVolume)
         case .toggleInputMute:
             action = .toggleInputMute
         case .keepCurrent:
             action = .keepCurrent
         }
         if let r = existing {
-            return Rule(id: r.id, trigger: trigger, action: action, enabled: r.enabled, profileID: profileID)
+            return Rule(
+                id: r.id,
+                trigger: trigger,
+                action: action,
+                enabled: r.enabled,
+                profileID: profileID,
+                condition: conditionKind.domain
+            )
         }
-        return Rule(trigger: trigger, action: action, profileID: profileID)
+        return Rule(
+            trigger: trigger,
+            action: action,
+            profileID: profileID,
+            condition: conditionKind.domain
+        )
     }
 }
 
@@ -572,7 +766,7 @@ struct FormRow<Content: View>: View {
 
 struct TemplatesSheet: View {
     @Environment(AppState.self) private var state
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.otoDismiss) private var dismiss
 
     @State private var selected: Set<UUID> = []
 
