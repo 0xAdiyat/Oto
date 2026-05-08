@@ -228,6 +228,9 @@ xcodebuild -project Oto.xcodeproj -scheme Oto -configuration Release build
 >
 > Send a [pull request](https://github.com/0xAdiyat/Oto/pulls) — I usually respond within 24–48 hours.
 
+## `⚡️` `Activities`
+![Alt](https://repobeats.axiom.co/api/embed/8cb4fb1e4728fa08724f4cac2198b71d53fe0946.svg "Repobeats analytics image")
+
 ---
 
 ## `🧑🏻‍💻` `Author`
