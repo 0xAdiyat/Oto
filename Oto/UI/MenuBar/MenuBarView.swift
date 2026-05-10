@@ -385,3 +385,19 @@ private struct DeviceRow<Trailing: View>: View {
         .padding(.vertical, 2)
     }
 }
+
+#if DEBUG
+#Preview("Menu bar — populated") {
+    MenuBarView(openMain: {})
+        .environment(AppState.previewPopulated)
+        .frame(width: 320)
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Menu bar — empty") {
+    MenuBarView(openMain: {})
+        .environment(AppState.previewEmpty)
+        .frame(width: 320)
+        .preferredColorScheme(.dark)
+}
+#endif

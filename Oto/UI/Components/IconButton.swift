@@ -30,7 +30,7 @@ struct IconButton: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(OtoUI.secondaryFG)
         .help(help)
         .onHover { isHovering = $0 }
         .animation(OtoUI.hoverEase, value: isHovering)
