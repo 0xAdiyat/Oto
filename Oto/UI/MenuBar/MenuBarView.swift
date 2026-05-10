@@ -53,7 +53,10 @@ struct MenuBarView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            Image("MenuBarIcon")
+            // Vector LogoMark, not the rasterised MenuBarIcon — the latter
+            // is only 16/32px and looks soft when scaled up to the 24pt
+            // popover header.
+            Image("LogoMark")
                 .resizable()
                 .scaledToFit()
                 .frame(height: 24)
