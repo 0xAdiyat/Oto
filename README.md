@@ -98,6 +98,10 @@
 - [x] **System Appearance Adaptive:**
   - Fully follows macOS Light / Dark / Auto appearance. No forced color scheme — the frosted-glass UI shifts naturally between modes.
 
+- [x] **Bluetooth Devices Inspector:**
+  - The Devices sheet lists all currently connected Bluetooth peripherals — keyboards, mice, headsets, game controllers — alongside the audio device list.
+  - Inferred from the IOBluetooth Class-of-Device bits, so each device gets the right SF Symbol (keyboard, mouse, headphones, gamecontroller, …) automatically.
+
 - [x] **Zero External Dependencies:**
   - Pure Apple SDK — CoreAudio, SwiftUI, `@Observable`. No Swift packages, no CocoaPods, no Carthage.
 

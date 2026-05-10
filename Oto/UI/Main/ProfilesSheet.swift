@@ -111,3 +111,11 @@ struct ProfilesSheet: View {
         .background(OtoUI.rowIdle, in: RoundedRectangle(cornerRadius: OtoUI.chipRadius))
     }
 }
+
+#if DEBUG
+#Preview("Profiles sheet") {
+    ProfilesSheet()
+        .environment(AppState.previewPopulated)
+        .previewSheetBackdrop()
+}
+#endif

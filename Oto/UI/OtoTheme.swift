@@ -60,25 +60,40 @@ enum OtoUI {
     // Window / panel
     static let panelWidth: CGFloat        = 720
     static let pillWidth: CGFloat         = 680
-    static let pillHeight: CGFloat        = 64
+    static let pillHeight: CGFloat        = 48
     static let spotlightSearchHeight: CGFloat = 44
-    static let spotlightFooterHeight: CGFloat = 46
+    static let spotlightFooterHeight: CGFloat = 36
     static let spotlightRowHeight: CGFloat    = 60
     static let spotlightSectionGap: CGFloat   = 14
 
     // Corner radii
-    static let panelRadius: CGFloat       = 24
-    static let cardRadius: CGFloat        = 14
-    static let chipRadius: CGFloat        = 10
-    static let buttonRadius: CGFloat      = 8
+    static let panelRadius: CGFloat       = 14
+    static let cardRadius: CGFloat        = 10
+    static let chipRadius: CGFloat        = 6
+    static let buttonRadius: CGFloat      = 5
 
     // Borders — `Color.primary` is white in dark mode and black in light mode,
     // so a low-opacity primary stroke reads as a subtle hairline in either
     // theme. Opacities are tuned slightly higher than a pure dark-mode value so
     // light-mode panels still have visible edges against light desktops.
-    static let strokeColor                 = Color.primary.opacity(0.16)
-    static let dividerColor                = Color.primary.opacity(0.11)
+    // Hairlines use a low-opacity neutral that flips polarity per appearance:
+    // bright white-at-low-opacity reads on dark panels, dark grey reads on
+    // light panels. Raw Color.primary would multiply with macOS's labelColor
+    // (~0.85) and smudge — these explicit tones stay crisp.
+    static let strokeColor                 = OtoUI.adaptiveTone(lightOpacity: 0.15, darkOpacity: 0.18)
+    static let dividerColor                = OtoUI.adaptiveTone(lightOpacity: 0.08, darkOpacity: 0.10)
     static let strokeWidth: CGFloat        = 1
+
+    // Translucent overlay stacked over `.thickMaterial` to push the panel's
+    // brightness in the right direction per appearance:
+    //   • Dark mode: a black scrim grounds text contrast on saturated
+    //     wallpapers (Raycast does the same).
+    //   • Light mode: a soft white scrim brightens the panel so it reads
+    //     light/airy instead of picking up wallpaper hue.
+    static let panelTint                   = OtoUI.adaptivePanelTint(
+        light: Color.white.opacity(0.42),
+        dark:  Color.black.opacity(0.32)
+    )
 
     // Shadows are always a dark drop, regardless of theme. Slightly heavier
     // than typical so the floating panel separates from light wallpapers too.
@@ -89,22 +104,30 @@ enum OtoUI {
     static let shadowStrongY: CGFloat      = 18
     static let shadowMediumY: CGFloat      = 14
 
-    // Surface tints (over .ultraThinMaterial). Bumped enough that rows are
-    // distinguishable in both schemes — black-at-low-opacity is much less
-    // visible against ultraThinMaterial than white-at-the-same-opacity.
-    static let rowIdle                     = Color.primary.opacity(0.06)
-    static let rowHover                    = Color.primary.opacity(0.12)
-    static let rowSelected                 = Color.primary.opacity(0.08)
-    static let iconTile                    = Color.primary.opacity(0.09)
-    static let mutedFG                     = Color.primary.opacity(0.62)
-    static let secondaryFG                 = Color.primary.opacity(0.78)
+    // Surface tints over the panel — flip polarity per appearance so chip /
+    // row backgrounds stay subtly visible against either the dark or light
+    // panel without compound-dimming (which Color.primary's labelColor base
+    // would cause).
+    static let rowIdle                     = OtoUI.adaptiveTone(lightOpacity: 0.05, darkOpacity: 0.08)
+    static let rowHover                    = OtoUI.adaptiveTone(lightOpacity: 0.10, darkOpacity: 0.14)
+    static let rowSelected                 = OtoUI.adaptiveTone(lightOpacity: 0.07, darkOpacity: 0.10)
+    static let iconTile                    = OtoUI.adaptiveTone(lightOpacity: 0.07, darkOpacity: 0.10)
+    // Foreground tones — explicit black/white per appearance so we sidestep
+    // macOS's labelColor softening (which would dim text down to ~0.85
+    // opacity even before our multiplier kicks in).
+    static let mutedFG                     = OtoUI.adaptiveTone(lightOpacity: 0.60, darkOpacity: 0.78)
+    static let secondaryFG                 = OtoUI.adaptiveTone(lightOpacity: 0.85, darkOpacity: 0.98)
+    /// Pure black in light mode, pure white in dark mode. Use for the most
+    /// important text (titles, headings) where you want max legibility
+    /// without macOS's labelColor softening.
+    static let primaryFG                   = OtoUI.adaptiveTone(lightOpacity: 1.0, darkOpacity: 1.0)
 
     // Type scale
-    static let titleSize: CGFloat          = 22
-    static let inputSize: CGFloat          = 21
-    static let bodySize: CGFloat           = 15
-    static let metaSize: CGFloat           = 13
-    static let captionSize: CGFloat        = 12
+    static let titleSize: CGFloat          = 16
+    static let inputSize: CGFloat          = 16
+    static let bodySize: CGFloat           = 13
+    static let metaSize: CGFloat           = 12
+    static let captionSize: CGFloat        = 11
 
     // Animation
     static let revealEase                  = Animation.easeOut(duration: 0.18)
@@ -112,22 +135,48 @@ enum OtoUI {
     static let hoverEase                   = Animation.easeOut(duration: 0.12)
 
     // Row sizing
-    static let rowHeight: CGFloat          = 74
+    static let rowHeight: CGFloat          = 66
     static let iconButtonSize: CGFloat     = 30
     static let triggerTileSize: CGFloat    = 48
+
+    // MARK: - Adaptive helpers
+
+    /// Returns black-at-`lightOpacity` in light mode, white-at-`darkOpacity`
+    /// in dark mode. Use for surfaces / strokes / foregrounds that need to
+    /// flip polarity but stay visually equivalent in both themes.
+    static func adaptiveTone(lightOpacity: Double, darkOpacity: Double) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.darkAqua, .vibrantDark, .accessibilityHighContrastDarkAqua, .accessibilityHighContrastVibrantDark]) != nil
+            return isDark
+                ? NSColor.white.withAlphaComponent(CGFloat(darkOpacity))
+                : NSColor.black.withAlphaComponent(CGFloat(lightOpacity))
+        })
+    }
+
+    /// Two SwiftUI `Color`s — light and dark — picked by current appearance.
+    /// More expressive than `adaptiveTone` when the colours aren't simple
+    /// black/white tones (e.g. one tinted, one neutral).
+    static func adaptivePanelTint(light: Color, dark: Color) -> Color {
+        let lightNS = NSColor(light)
+        let darkNS  = NSColor(dark)
+        return Color(nsColor: NSColor(name: nil) { appearance in
+            let isDark = appearance.bestMatch(from: [.darkAqua, .vibrantDark, .accessibilityHighContrastDarkAqua, .accessibilityHighContrastVibrantDark]) != nil
+            return isDark ? darkNS : lightNS
+        })
+    }
 }
 
 enum OtoSettingsUI {
     static let windowWidth: CGFloat        = 900
     static let windowHeight: CGFloat       = 640
-    static let contentMaxWidth: CGFloat    = 500
-    static let contentTopPadding: CGFloat  = 14
-    static let sectionSpacing: CGFloat     = 0
+    static let contentMaxWidth: CGFloat    = 540
+    static let contentTopPadding: CGFloat  = 22
+    static let sectionSpacing: CGFloat     = 22
     static let cardSpacing: CGFloat        = 10
     static let cardPadding: CGFloat        = 14
-    static let topBarHeight: CGFloat       = 94
-    static let topTabWidth: CGFloat        = 88
-    static let topTabHeight: CGFloat       = 54
+    static let topBarHeight: CGFloat       = 64
+    static let topTabWidth: CGFloat        = 84
+    static let topTabHeight: CGFloat       = 46
     static let cardRadius: CGFloat         = 12
     static let controlRadius: CGFloat      = 10
     static let tabSelected                 = Color.primary.opacity(0.12)
@@ -147,17 +196,25 @@ enum OtoSettingsUI {
 // MARK: - Reusable view modifiers
 
 extension View {
-    /// Spotlight-style material panel: ultraThinMaterial fill + soft white
-    /// stroke + diffuse drop shadow. Use for the main rules card and sheets.
+    /// Raycast-style material panel: thickMaterial fill + neutral dark tint
+    /// stacked as the BACKGROUND (so the tint sits behind content, not over
+    /// it — putting the tint in `.overlay` would dim every text/icon inside
+    /// the panel by the tint's opacity). Stroke is kept as `.overlay` since
+    /// it's a frame around the outside.
     func materialPanel(
         cornerRadius: CGFloat = OtoUI.panelRadius,
         strongShadow: Bool = true
     ) -> some View {
-        self
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        return self
+            .background {
+                ZStack {
+                    shape.fill(.thickMaterial)
+                    shape.fill(OtoUI.panelTint)
+                }
+            }
             .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(OtoUI.strokeColor, lineWidth: OtoUI.strokeWidth)
+                shape.strokeBorder(OtoUI.strokeColor, lineWidth: OtoUI.strokeWidth)
             }
             .shadow(
                 color: strongShadow ? OtoUI.shadowStrong : OtoUI.shadowMedium,
@@ -177,12 +234,19 @@ extension View {
     }
 
     /// Capsule variant of `materialPanel` — used for the header pill.
+    /// Tint goes in the BACKGROUND (behind content) so it doesn't dim the
+    /// header text/icons.
     func materialCapsule() -> some View {
-        self
-            .background(.ultraThinMaterial, in: Capsule(style: .continuous))
+        let shape = Capsule(style: .continuous)
+        return self
+            .background {
+                ZStack {
+                    shape.fill(.thickMaterial)
+                    shape.fill(OtoUI.panelTint)
+                }
+            }
             .overlay {
-                Capsule(style: .continuous)
-                    .strokeBorder(OtoUI.strokeColor, lineWidth: OtoUI.strokeWidth)
+                shape.strokeBorder(OtoUI.strokeColor, lineWidth: OtoUI.strokeWidth)
             }
             .shadow(
                 color: OtoUI.shadowStrong,

@@ -373,3 +373,19 @@ struct HotkeyRecorder: View {
         return nil
     }
 }
+
+#if DEBUG
+private struct HotkeyRecorderPreviewWrapper: View {
+    @State private var shortcut: HotkeyShortcut? = nil
+    var body: some View {
+        HotkeyRecorder(shortcut: $shortcut, onCommit: { _ in })
+            .padding(40)
+            .background(Color.black.opacity(0.92))
+            .preferredColorScheme(.dark)
+    }
+}
+
+#Preview("Hotkey recorder") {
+    HotkeyRecorderPreviewWrapper()
+}
+#endif

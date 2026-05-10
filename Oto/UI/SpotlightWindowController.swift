@@ -27,6 +27,13 @@ final class SpotlightWindowController {
     private var hostingView: NSHostingView<AnyView>?
     private var resignObserver: NSObjectProtocol?
 
+    /// While true, the `didResignActive` auto-hide path is a no-op. Set this
+    /// from MainWindowView whenever an in-panel sheet (Devices, Add Rule, …)
+    /// is showing — opening some sheets briefly resigns app-active state
+    /// (system permission alerts, AppKit-bridged controls), which would
+    /// otherwise hide the entire window mid-interaction.
+    var suppressAutoHide: Bool = false
+
     private init() {}
 
     func install<Root: View>(rootView: Root) {
@@ -80,6 +87,9 @@ final class SpotlightWindowController {
         ) { _ in
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(250))
+                // Sheets / system permission alerts can briefly steal focus.
+                // Skip auto-hide entirely while a sheet owns the panel.
+                guard !SpotlightWindowController.shared.suppressAutoHide else { return }
                 guard !NSApp.isActive else { return }
                 let frontId = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
                 guard frontId != myBundleId else { return }
@@ -126,8 +136,13 @@ final class SpotlightWindowController {
     }
 
     private func preferredSize(for visibleFrame: NSRect) -> NSSize {
-        NSSize(
-            width: min(820, max(720, visibleFrame.width - 64)),
+        // Hug the cards: pillWidth (680) + 16pt margin on each side = 712.
+        // On tiny screens fall back to whatever fits with at least a 16pt
+        // outer margin so the window never crops the cards.
+        let target: CGFloat = OtoUI.pillWidth + 32
+        let width = min(target, max(target - 32, visibleFrame.width - 32))
+        return NSSize(
+            width: width,
             height: min(820, max(620, visibleFrame.height - 80))
         )
     }

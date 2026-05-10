@@ -39,17 +39,18 @@ struct OtoSettingsView: View {
     var body: some View {
         VStack(spacing: 0) {
             settingsHeader
-            
+
             Rectangle()
                 .fill(OtoSettingsUI.glassStroke)
                 .frame(height: 1)
 
             ScrollView {
-                VStack(alignment: .leading, spacing: OtoSettingsUI.sectionSpacing) {
+                VStack(alignment: .center, spacing: OtoSettingsUI.sectionSpacing) {
                     selectedContent
+                    Spacer(minLength: 0)
                 }
                 .padding(.top, OtoSettingsUI.contentTopPadding)
-                .padding(.bottom, 48)
+                .padding(.bottom, 28)
                 .frame(maxWidth: .infinity, alignment: .top)
             }
             .background(Color.clear)
@@ -78,26 +79,21 @@ struct OtoSettingsView: View {
     }
 
     private var settingsHeader: some View {
-        ZStack(alignment: .topLeading) {
-            Text("Oto Settings")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(OtoSettingsUI.valueFG)
-                .frame(maxWidth: .infinity)
-                .padding(.top, 7)
-
-            HStack(alignment: .top, spacing: 16) {
-                ForEach(SettingsSection.allCases) { section in
-                    SettingsTopTab(
-                        section: section,
-                        isSelected: selected == section
-                    ) {
-                        selected = section
-                    }
+        // Single compact tab strip — the window title bar already announces
+        // "Oto Settings", so the duplicate inline title is redundant. Removing
+        // it gives the tabs proper vertical breathing room without inflating
+        // the toolbar height.
+        HStack(spacing: 4) {
+            ForEach(SettingsSection.allCases) { section in
+                SettingsTopTab(
+                    section: section,
+                    isSelected: selected == section
+                ) {
+                    selected = section
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .center)
-            .padding(.top, 25)
         }
+        .frame(maxWidth: .infinity, alignment: .center)
         .frame(height: OtoSettingsUI.topBarHeight)
         .background(Color.otoSettingsSurface.opacity(0.42))
     }
@@ -132,25 +128,19 @@ private struct SettingsTopTab: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 8) {
-                OtoIcon(name: section.icon, size: 15)
-                    .foregroundStyle(isSelected ? OtoSettingsUI.valueFG : OtoSettingsUI.quietFG)
-                    .frame(height: 18)
+            VStack(spacing: 6) {
+                OtoIcon(name: section.icon, size: 14)
+                    .foregroundStyle(iconColor)
+                    .frame(height: 16)
                 Text(section.title)
-                    .font(.system(size: 12.5, weight: isSelected ? .semibold : .medium))
+                    .font(.system(size: 11.5, weight: isSelected ? .semibold : .medium))
                     .lineLimit(1)
                     .minimumScaleFactor(0.78)
             }
             .frame(width: OtoSettingsUI.topTabWidth, height: OtoSettingsUI.topTabHeight)
             .background(rowFill, in: RoundedRectangle(cornerRadius: OtoSettingsUI.controlRadius, style: .continuous))
-            .foregroundStyle(isSelected ? OtoSettingsUI.valueFG : OtoSettingsUI.quietFG)
+            .foregroundStyle(labelColor)
             .contentShape(RoundedRectangle(cornerRadius: OtoSettingsUI.controlRadius, style: .continuous))
-            .overlay {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: OtoSettingsUI.controlRadius, style: .continuous)
-                        .strokeBorder(OtoSettingsUI.strongStroke, lineWidth: 1)
-                }
-            }
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
@@ -158,9 +148,22 @@ private struct SettingsTopTab: View {
         .animation(OtoUI.hoverEase, value: isSelected)
     }
 
+    /// Selected tab uses a teal-tinted pill fill — same brand language as the
+    /// spotlight panel's "All" filter chip — instead of an outline that read
+    /// as a stuck "pressed" state on the previous design.
     private var rowFill: Color {
-        if isSelected { return OtoSettingsUI.tabSelected }
+        if isSelected { return Color.otoTeal.opacity(0.18) }
         return isHovering ? OtoSettingsUI.tabHover : Color.clear
+    }
+
+    private var iconColor: Color {
+        if isSelected { return Color.otoTeal }
+        return OtoSettingsUI.quietFG
+    }
+
+    private var labelColor: Color {
+        if isSelected { return Color.otoTeal }
+        return OtoSettingsUI.quietFG
     }
 }
 
@@ -172,40 +175,41 @@ private struct GeneralSettingsContent: View {
     @State private var currentHotkey: HotkeyShortcut?
 
     var body: some View {
-        VStack(spacing: 0) {
-            SettingsContentSection {
-                SettingsFieldRow(label: "Startup") {
-                    Toggle("Launch Oto at login", isOn: $launchAtLogin)
-                        .toggleStyle(.checkbox)
+        VStack(spacing: OtoSettingsUI.sectionSpacing) {
+            SettingsContentSection(title: "Startup") {
+                SettingsFieldRow(label: "Launch at login") {
+                    Toggle("", isOn: $launchAtLogin)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
                         .onChange(of: launchAtLogin) { _, newValue in
                             LaunchAtLogin.setEnabled(newValue)
                             launchAtLogin = LaunchAtLogin.isEnabled
                         }
                 }
 
-                SettingsFieldRow(label: "Oto Hotkey") {
+                SettingsFieldRow(label: "Hotkey") {
                     HotkeyRecorder(shortcut: $currentHotkey) { new in
                         GlobalHotkeyManager.shared.update(new)
                         currentHotkey = GlobalHotkeyManager.shared.shortcut
                     }
-                    .frame(width: 300)
                 }
             }
 
-            SettingsContentSection {
-                SettingsFieldRow(label: "Setup") {
+            SettingsContentSection(title: "Onboarding") {
+                SettingsFieldRow(label: "First-run setup") {
                     Button {
                         NSApp.keyWindow?.close()
                         SpotlightWindowController.shared.present(activate: true)
                         state.presentFirstRunSetup()
                     } label: {
                         HStack {
-                            Text("Run first-run setup")
+                            Text("Run setup again")
                             Spacer()
-                            OtoIcon(name: "arrow.up.right", size: 12)
+                            OtoIcon(name: "arrow.up.right", size: 11)
                         }
-                        .padding(.horizontal, 14)
-                        .frame(width: 300, height: 34)
+                        .padding(.horizontal, 12)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 30)
                         .background(OtoSettingsUI.controlFill, in: RoundedRectangle(cornerRadius: OtoSettingsUI.controlRadius, style: .continuous))
                     }
                     .buttonStyle(.plain)
@@ -253,21 +257,20 @@ private struct AutomationSettingsContent: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            SettingsContentSection {
-                SettingsFieldRow(label: "Activity") {
+        VStack(spacing: OtoSettingsUI.sectionSpacing) {
+            SettingsContentSection(title: "Recent Activity") {
+                SettingsFieldRow(label: "Total") {
                     HStack(spacing: 10) {
-                        Text("\(state.store.fireHistory.count) recent events")
-                            .font(.system(size: 13, weight: .medium))
+                        Text("\(state.store.fireHistory.count) events")
+                            .font(.system(size: 12.5, weight: .medium))
                             .foregroundStyle(OtoSettingsUI.quietFG)
                         Spacer()
-                        Button("Clear Activity") {
+                        Button("Clear") {
                             showClearConfirmation = true
                         }
                         .controlSize(.small)
                         .disabled(state.store.fireHistory.isEmpty)
                     }
-                    .frame(width: 300)
                 }
 
                 SettingsFieldRow(label: "Filter") {
@@ -278,15 +281,13 @@ private struct AutomationSettingsContent: View {
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
-                    .frame(width: 300)
                 }
             }
 
-            SettingsContentSection(verticalPadding: 18) {
+            SettingsContentSection(title: "Timeline", verticalPadding: 0) {
                 RuleActivityTimeline(events: filteredEvents)
-                    .frame(width: OtoSettingsUI.contentMaxWidth)
+                    .frame(maxWidth: .infinity)
                     .frame(minHeight: 260)
-                    .background(OtoSettingsUI.subtleFill, in: RoundedRectangle(cornerRadius: OtoSettingsUI.controlRadius, style: .continuous))
             }
         }
         .confirmationDialog("Clear activity?", isPresented: $showClearConfirmation) {
@@ -432,43 +433,30 @@ private struct DeviceSettingsContent: View {
     @Environment(AppState.self) private var state
 
     var body: some View {
-        VStack(spacing: 0) {
-            SettingsContentSection {
-                deviceSection(title: "Inputs", devices: state.monitor.allDevices.filter(\.hasInput), isInput: true)
+        VStack(spacing: OtoSettingsUI.sectionSpacing) {
+            SettingsContentSection(title: "Inputs (\(state.monitor.allDevices.filter(\.hasInput).count))") {
+                deviceList(devices: state.monitor.allDevices.filter(\.hasInput), isInput: true)
             }
-            SettingsContentSection {
-                deviceSection(title: "Outputs", devices: state.monitor.allDevices.filter(\.hasOutput), isInput: false)
+            SettingsContentSection(title: "Outputs (\(state.monitor.allDevices.filter(\.hasOutput).count))") {
+                deviceList(devices: state.monitor.allDevices.filter(\.hasOutput), isInput: false)
             }
         }
     }
 
-    private func deviceSection(title: String, devices: [AudioDevice], isInput: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(OtoSettingsUI.quietFG)
-                Text("\(devices.count)")
-                    .font(.system(size: 11, weight: .bold))
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2)
-                    .background(OtoSettingsUI.controlFill, in: Capsule())
-                    .foregroundStyle(OtoSettingsUI.quietFG)
-            }
-
-            if devices.isEmpty {
-                Text("No devices visible to macOS.")
-                    .font(.system(size: OtoUI.captionSize))
-                    .foregroundStyle(OtoSettingsUI.quietFG)
-            } else {
-                VStack(spacing: 8) {
-                    ForEach(devices) { device in
-                        settingsDeviceRow(device, isInput: isInput)
-                    }
+    @ViewBuilder
+    private func deviceList(devices: [AudioDevice], isInput: Bool) -> some View {
+        if devices.isEmpty {
+            Text("No devices visible to macOS.")
+                .font(.system(size: OtoUI.captionSize))
+                .foregroundStyle(OtoSettingsUI.quietFG)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            VStack(spacing: 6) {
+                ForEach(devices) { device in
+                    settingsDeviceRow(device, isInput: isInput)
                 }
             }
         }
-        .frame(width: OtoSettingsUI.contentMaxWidth, alignment: .leading)
     }
 
     private func settingsDeviceRow(_ device: AudioDevice, isInput: Bool) -> some View {
@@ -532,45 +520,43 @@ private struct QuietHoursSettingsContent: View {
 
     var body: some View {
         @Bindable var quietHours = state.quietHours
-        VStack(spacing: 0) {
-            SettingsContentSection {
-                SettingsFieldRow(label: "Mode") {
-                    Toggle("Limit output volume", isOn: $quietHours.settings.enabled)
-                        .toggleStyle(.checkbox)
+        VStack(spacing: OtoSettingsUI.sectionSpacing) {
+            SettingsContentSection(title: "Schedule") {
+                SettingsFieldRow(label: "Limit volume") {
+                    Toggle("", isOn: $quietHours.settings.enabled)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
                 }
 
                 SettingsFieldRow(label: "From") {
                     TimePickerRow(label: "", minutes: $quietHours.settings.startMinute)
-                        .frame(width: 300)
                         .disabled(!quietHours.settings.enabled)
                 }
 
                 SettingsFieldRow(label: "To") {
                     TimePickerRow(label: "", minutes: $quietHours.settings.endMinute)
-                        .frame(width: 300)
                         .disabled(!quietHours.settings.enabled)
                 }
             }
 
-            SettingsContentSection {
-                SettingsFieldRow(label: "Max Volume") {
+            SettingsContentSection(title: "Volume Cap") {
+                SettingsFieldRow(label: "Max volume") {
                     HStack(spacing: 12) {
-                        Text("\(Int(quietHours.settings.maxVolume * 100))%")
-                            .font(.system(size: 13, weight: .semibold))
-                            .monospacedDigit()
-                            .frame(width: 42, alignment: .leading)
-                            .foregroundStyle(OtoSettingsUI.valueFG)
                         Slider(value: $quietHours.settings.maxVolume, in: 0.05...1.0, step: 0.05)
+                        Text("\(Int(quietHours.settings.maxVolume * 100))%")
+                            .font(.system(size: 12, weight: .semibold))
+                            .monospacedDigit()
+                            .frame(width: 42, alignment: .trailing)
+                            .foregroundStyle(OtoSettingsUI.valueFG)
                     }
-                    .frame(width: 300)
                     .disabled(!quietHours.settings.enabled)
                 }
 
                 SettingsFieldRow(label: "Behavior") {
                     Text("Attempts above the cap reset automatically.")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(OtoSettingsUI.quietFG)
-                        .frame(width: 300, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -615,11 +601,12 @@ private struct NotificationsSettingsContent: View {
     @State private var status: UNAuthorizationStatus = .notDetermined
 
     var body: some View {
-        VStack(spacing: 0) {
-            SettingsContentSection {
-                SettingsFieldRow(label: "Rule Events") {
-                    Toggle("Notify when rules apply", isOn: $showNotifications)
-                        .toggleStyle(.checkbox)
+        VStack(spacing: OtoSettingsUI.sectionSpacing) {
+            SettingsContentSection(title: "Rule Events") {
+                SettingsFieldRow(label: "Notify on apply") {
+                    Toggle("", isOn: $showNotifications)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
                         .disabled(status == .denied)
                         .onChange(of: showNotifications) { _, newValue in
                             guard newValue else { return }
@@ -630,22 +617,21 @@ private struct NotificationsSettingsContent: View {
 
                 SettingsFieldRow(label: "Status") {
                     Text(notificationSubtitle)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(status == .denied ? Color.otoYellow : OtoSettingsUI.quietFG)
-                        .frame(width: 300, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
 
             if status == .denied {
-                SettingsContentSection {
-                    SettingsFieldRow(label: "Permission") {
+                SettingsContentSection(title: "Permission") {
+                    SettingsFieldRow(label: "macOS") {
                         Button("Open System Settings") {
                             if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
                                 NSWorkspace.shared.open(url)
                             }
                         }
                         .controlSize(.small)
-                        .frame(width: 300, alignment: .leading)
                     }
                 }
             }
@@ -668,20 +654,19 @@ private struct HotkeySettingsContent: View {
     @State private var current: HotkeyShortcut?
 
     var body: some View {
-        SettingsContentSection {
+        SettingsContentSection(title: "Global Shortcut") {
             SettingsFieldRow(label: "Open Oto") {
                 HotkeyRecorder(shortcut: $current) { new in
                     GlobalHotkeyManager.shared.update(new)
                     current = GlobalHotkeyManager.shared.shortcut
                 }
-                .frame(width: 300)
             }
 
             SettingsFieldRow(label: "Behavior") {
-                Text("Summon the Spotlight panel from anywhere.")
-                    .font(.system(size: 13, weight: .medium))
+                Text("Summon the spotlight panel from anywhere.")
+                    .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(OtoSettingsUI.quietFG)
-                    .frame(width: 300, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .onAppear { current = GlobalHotkeyManager.shared.shortcut }
@@ -694,25 +679,24 @@ private struct AboutSettingsContent: View {
     private static let repoURL = URL(string: "https://github.com/0xadiyat/oto")!
 
     var body: some View {
-        SettingsContentSection {
+        SettingsContentSection(title: "About Oto") {
             SettingsFieldRow(label: "Version") {
-                HStack(spacing: 14) {
+                HStack(spacing: 12) {
                     Image("LogoMark")
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 42, height: 42)
-                    VStack(alignment: .leading, spacing: 4) {
+                        .frame(width: 36, height: 36)
+                    VStack(alignment: .leading, spacing: 2) {
                         Image("LogoWordmark")
                             .resizable()
                             .scaledToFit()
-                            .frame(height: 18)
+                            .frame(height: 16)
                         Text(versionString)
                             .font(.system(size: OtoUI.captionSize))
                             .foregroundStyle(OtoSettingsUI.quietFG)
                     }
                     Spacer()
                 }
-                .frame(width: 300)
             }
 
             SettingsFieldRow(label: "Source") {
@@ -720,10 +704,11 @@ private struct AboutSettingsContent: View {
                     HStack {
                         Text("View Oto on GitHub")
                         Spacer()
-                        OtoIcon(name: "arrow.up.right", size: 12)
+                        OtoIcon(name: "arrow.up.right", size: 11)
                     }
-                    .padding(.horizontal, 14)
-                    .frame(width: 300, height: 34)
+                    .padding(.horizontal, 12)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 30)
                     .background(OtoSettingsUI.controlFill, in: RoundedRectangle(cornerRadius: OtoSettingsUI.controlRadius, style: .continuous))
                 }
                 .buttonStyle(.plain)
@@ -732,9 +717,9 @@ private struct AboutSettingsContent: View {
 
             SettingsFieldRow(label: "Copyright") {
                 Text("Copyright © 2026 0xAdiyat.")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(OtoSettingsUI.quietFG)
-                    .frame(width: 300, alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -749,23 +734,37 @@ private struct AboutSettingsContent: View {
 
 // MARK: - Shared Settings Components
 
+/// Grouped settings card with an optional small uppercase header. Replaces
+/// the previous full-width-divider layout — gives the form structure and
+/// makes related fields read as a unit.
 private struct SettingsContentSection<Content: View>: View {
-    var verticalPadding: CGFloat = 18
+    var title: String? = nil
+    var verticalPadding: CGFloat = 14
     @ViewBuilder let content: Content
 
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 8) {
+            if let title {
+                Text(title.uppercased())
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .tracking(0.6)
+                    .foregroundStyle(OtoSettingsUI.quietFG)
+                    .padding(.leading, 4)
+            }
+
+            VStack(spacing: 4) {
                 content
             }
-                .frame(maxWidth: OtoSettingsUI.contentMaxWidth, alignment: .leading)
-                .padding(.vertical, verticalPadding)
-                .frame(maxWidth: .infinity)
-
-            Rectangle()
-                .fill(OtoSettingsUI.glassStroke)
-                .frame(height: 1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, verticalPadding)
+            .padding(.horizontal, 14)
+            .background(OtoSettingsUI.cardFill, in: RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous)
+                    .strokeBorder(OtoSettingsUI.glassStroke, lineWidth: 1)
+            }
         }
+        .frame(maxWidth: OtoSettingsUI.contentMaxWidth)
     }
 }
 
@@ -774,19 +773,19 @@ private struct SettingsFieldRow<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        HStack(alignment: .center, spacing: 24) {
+        HStack(alignment: .center, spacing: 16) {
             Text(label)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 12.5, weight: .medium))
                 .foregroundStyle(OtoSettingsUI.labelFG)
-                .frame(width: 118, alignment: .trailing)
+                .frame(width: 112, alignment: .leading)
 
             content
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(OtoSettingsUI.valueFG)
-                .frame(width: 300, alignment: .leading)
-                .frame(minHeight: 36)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(minHeight: 32)
         }
-        .frame(width: OtoSettingsUI.contentMaxWidth, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -908,3 +907,15 @@ private struct SettingsWindowConfigurator: NSViewRepresentable {
         }
     }
 }
+
+#if DEBUG
+#Preview("Settings — General") {
+    OtoSettingsView()
+        .environment(AppState.previewPopulated)
+}
+
+#Preview("Settings — Quiet Hours") {
+    OtoSettingsView()
+        .environment(AppState.previewPopulated)
+}
+#endif

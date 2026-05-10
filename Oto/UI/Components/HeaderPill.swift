@@ -15,14 +15,15 @@ struct HeaderPill: View {
     @State private var isHovering = false
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Image("LogoFull")
                 .resizable()
                 .scaledToFit()
-                .frame(height: 26)
+                .frame(height: 20)
 
             Text("Rules")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(OtoUI.primaryFG)
 
             Spacer()
 
@@ -30,16 +31,16 @@ struct HeaderPill: View {
 
             MasterToggle()
 
-            HStack(spacing: 4) {
+            HStack(spacing: 2) {
                 HeaderIconButton(icon: "plus", help: "Add rule", action: onAdd)
                 HeaderIconButton(icon: "wand.and.stars", help: "Templates", action: onTemplates)
                 HeaderIconButton(icon: "ellipsis", help: "More", action: showOverflowMenu)
             }
-            .opacity(isHovering ? 1 : 0.55)
+            .opacity(isHovering ? 1 : 0.85)
             .animation(.easeOut(duration: 0.14), value: isHovering)
         }
-        .padding(.leading, 18)
-        .padding(.trailing, 10)
+        .padding(.leading, 14)
+        .padding(.trailing, 8)
         .frame(width: OtoUI.pillWidth, height: OtoUI.pillHeight)
         .materialCapsule()
         .onHover { isHovering = $0 }
@@ -76,15 +77,15 @@ struct HeaderPill: View {
             Divider()
             Button("Manage profiles…", action: onShowProfiles)
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 5) {
                 let active = state.store.profiles.first(where: { $0.id == state.store.activeProfileID })
-                OtoIcon(name: active?.icon ?? "square.grid.2x2", size: 12)
+                OtoIcon(name: active?.icon ?? "square.grid.2x2", size: 11)
                 Text(active?.name ?? "All")
-                    .font(.system(size: 12, weight: .medium))
-                OtoIcon(name: "chevron.down", size: 9)
+                    .font(.system(size: 11, weight: .medium))
+                OtoIcon(name: "chevron.down", size: 8)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
             .background(OtoUI.rowIdle, in: Capsule())
             .foregroundStyle(OtoUI.secondaryFG)
         }
@@ -163,16 +164,16 @@ private struct MasterToggle: View {
         Button {
             performToggle(summary: summary)
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 5) {
                 Circle()
                     .fill(summary.dotColor)
-                    .frame(width: 7, height: 7)
+                    .frame(width: 6, height: 6)
                 Text(summary.label)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(summary.fgColor)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
             .background(OtoUI.rowIdle, in: Capsule())
             .overlay {
                 Capsule()
@@ -287,3 +288,35 @@ private struct Summary: Equatable {
     var hasAnyEnabled:  Bool { activeCount > 0 }
     var hasAnyDisabled: Bool { totalCount - activeCount > 0 && totalCount > 0 }
 }
+
+#if DEBUG
+#Preview("Header pill — populated") {
+    HeaderPill(
+        onAdd: {},
+        onTemplates: {},
+        onShowProfiles: {},
+        onShowDevices: {},
+        onShowSettings: {},
+        onShowAbout: {}
+    )
+    .environment(AppState.previewPopulated)
+    .padding(40)
+    .background(Color.black.opacity(0.92))
+    .preferredColorScheme(.dark)
+}
+
+#Preview("Header pill — empty") {
+    HeaderPill(
+        onAdd: {},
+        onTemplates: {},
+        onShowProfiles: {},
+        onShowDevices: {},
+        onShowSettings: {},
+        onShowAbout: {}
+    )
+    .environment(AppState.previewEmpty)
+    .padding(40)
+    .background(Color.black.opacity(0.92))
+    .preferredColorScheme(.dark)
+}
+#endif
