@@ -6,6 +6,7 @@ import AppKit
 struct DevicesSheet: View {
     @Environment(AppState.self) private var state
     @Environment(\.otoDismiss) private var dismiss
+    @State private var btMonitor = BluetoothPeripheralMonitor()
 
     var inputs: [AudioDevice] { state.monitor.allDevices.filter(\.hasInput) }
     var outputs: [AudioDevice] { state.monitor.allDevices.filter(\.hasOutput) }
@@ -24,6 +25,7 @@ struct DevicesSheet: View {
                 VStack(alignment: .leading, spacing: 18) {
                     section(title: "Inputs", count: inputs.count, devices: inputs, isInput: true)
                     section(title: "Outputs", count: outputs.count, devices: outputs, isInput: false)
+                    bluetoothSection
                 }
                 .padding(.bottom, 4)
             }
@@ -42,6 +44,69 @@ struct DevicesSheet: View {
         .materialPanel()
         .focusEffectDisabled()
         .suppressAppKitFocusRings()
+    }
+
+    @ViewBuilder
+    private var bluetoothSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Bluetooth")
+                    .font(.system(size: 15, weight: .semibold))
+                Text("\(btMonitor.connectedDevices.count)")
+                    .font(.system(size: 12))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1)
+                    .background(OtoUI.rowIdle, in: Capsule())
+                    .foregroundStyle(OtoUI.mutedFG)
+            }
+            if btMonitor.connectedDevices.isEmpty {
+                Text("No Bluetooth devices connected.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(OtoUI.mutedFG)
+                    .padding(.vertical, 8)
+            } else {
+                VStack(spacing: 6) {
+                    ForEach(btMonitor.connectedDevices) { device in
+                        bluetoothDeviceRow(device)
+                    }
+                }
+            }
+        }
+        .onAppear { btMonitor.refresh() }
+    }
+
+    private func bluetoothDeviceRow(_ device: BluetoothPeripheral) -> some View {
+        let tint = Color.otoNavy
+        return HStack(spacing: 12) {
+            OtoIcon(name: device.kind.systemImage, size: 18)
+                .frame(width: 40, height: 40)
+                .background(tint.opacity(0.16), in: RoundedRectangle(cornerRadius: OtoUI.chipRadius))
+                .overlay {
+                    RoundedRectangle(cornerRadius: OtoUI.chipRadius)
+                        .strokeBorder(tint.opacity(0.32), lineWidth: 1)
+                }
+                .foregroundStyle(tint)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(device.name)
+                    .font(.system(size: 14, weight: .medium))
+                Text(device.kind.label)
+                    .font(.system(size: 12))
+                    .foregroundStyle(OtoUI.mutedFG)
+            }
+
+            Spacer()
+
+            Text("Connected")
+                .font(.system(size: 11, weight: .bold))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(tint.opacity(0.18), in: Capsule())
+                .foregroundStyle(tint)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(OtoUI.rowIdle, in: RoundedRectangle(cornerRadius: OtoUI.chipRadius))
     }
 
     private func section(title: String, count: Int, devices: [AudioDevice], isInput: Bool) -> some View {
