@@ -77,28 +77,29 @@ struct RulesPanel: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 12) {
             ZStack {
                 Circle()
                     .fill(emptyStateTint.opacity(0.16))
-                    .frame(width: 58, height: 58)
+                    .frame(width: 44, height: 44)
                     .blur(radius: 8)
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 54, height: 54)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(emptyStateTint.opacity(0.18))
+                    .frame(width: 40, height: 40)
                     .overlay {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .strokeBorder(emptyStateTint.opacity(0.36), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(emptyStateTint.opacity(0.42), lineWidth: 1)
                     }
-                OtoIcon(name: emptyStateIcon, size: 24, weight: .medium)
+                OtoIcon(name: emptyStateIcon, size: 18, weight: .medium)
                     .foregroundStyle(emptyStateTint)
             }
 
-            VStack(spacing: 6) {
+            VStack(spacing: 4) {
                 Text(emptyStateTitle)
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(OtoUI.primaryFG)
                 Text(emptyStateMessage)
-                    .font(.system(size: 13))
+                    .font(.system(size: 12))
                     .foregroundStyle(OtoUI.mutedFG)
                     .multilineTextAlignment(.center)
                     .lineLimit(3)
@@ -107,10 +108,10 @@ struct RulesPanel: View {
 
             if let hint = emptyStateHint {
                 Text(hint)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(emptyStateTint)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
                     .background(emptyStateTint.opacity(0.12), in: Capsule())
                     .overlay {
                         Capsule()
@@ -331,7 +332,7 @@ struct RuleRow: View {
                 }
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, isHovering ? 8 : 0)
         .frame(height: OtoUI.rowHeight)
         .background {
             RoundedRectangle(cornerRadius: OtoUI.cardRadius, style: .continuous)
@@ -1097,3 +1098,57 @@ struct TemplatesSheet: View {
         .buttonStyle(.plain)
     }
 }
+
+#if DEBUG
+#Preview("Rule row — enabled") {
+    RuleRow(rule: Rule.previewSamples[0], onEdit: {})
+        .environment(AppState.previewPopulated)
+        .frame(width: OtoUI.pillWidth - 24)
+        .padding(20)
+        .background(Color.black.opacity(0.92))
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Rule row — with conflict") {
+    RuleRow(rule: Rule.previewSamples[0], hasConflict: true, onEdit: {})
+        .environment(AppState.previewPopulated)
+        .frame(width: OtoUI.pillWidth - 24)
+        .padding(20)
+        .background(Color.black.opacity(0.92))
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Rules panel — populated") {
+    RulesPanel(filter: .all, onEdit: { _ in })
+        .environment(AppState.previewPopulated)
+        .padding(40)
+        .background(Color.black.opacity(0.92))
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Rules panel — empty") {
+    RulesPanel(filter: .all, onEdit: { _ in })
+        .environment(AppState.previewEmpty)
+        .padding(40)
+        .background(Color.black.opacity(0.92))
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Rule editor — new") {
+    RuleEditorSheet(existing: nil)
+        .environment(AppState.previewPopulated)
+        .previewSheetBackdrop()
+}
+
+#Preview("Rule editor — edit") {
+    RuleEditorSheet(existing: Rule.previewSamples[0])
+        .environment(AppState.previewPopulated)
+        .previewSheetBackdrop()
+}
+
+#Preview("Templates sheet") {
+    TemplatesSheet()
+        .environment(AppState.previewPopulated)
+        .previewSheetBackdrop()
+}
+#endif

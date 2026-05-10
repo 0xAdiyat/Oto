@@ -302,3 +302,20 @@ struct AboutSheet: View {
         .suppressAppKitFocusRings()
     }
 }
+
+#if DEBUG
+#Preview("Devices sheet") {
+    DevicesSheet()
+        .environment(AppState.previewPopulated)
+        .environment(\.otoDismiss, OtoDismissAction(action: {}))
+        .padding(40)
+        .background(Color.black)
+}
+
+#Preview("About sheet") {
+    AboutSheet()
+        .environment(\.otoDismiss, OtoDismissAction(action: {}))
+        .padding(40)
+        .background(Color.black)
+}
+#endif

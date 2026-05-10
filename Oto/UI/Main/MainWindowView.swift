@@ -1,3 +1,4 @@
+
 import Combine
 import SwiftUI
 
@@ -33,7 +34,7 @@ struct MainWindowView: View {
         ZStack {
             Color.clear
 
-            VStack(spacing: 14) {
+            VStack(spacing: 12) {
                 HeaderPill(
                     onAdd: { sheet = .addRule },
                     onTemplates: { sheet = .templates },
@@ -88,6 +89,10 @@ struct MainWindowView: View {
                 .hidden()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Spotlight panel follows the system theme. Token colours
+        // (panelTint, mutedFG, secondaryFG, primaryFG, strokeColor, …) flip
+        // polarity per appearance via `OtoUI.adaptiveTone`, so light mode
+        // gets a bright panel with dark text and dark mode gets the inverse.
         .focusEffectDisabled()
         .suppressAppKitFocusRings()
         .animation(.easeOut(duration: 0.18), value: isSheetActive)
@@ -96,10 +101,21 @@ struct MainWindowView: View {
         .onReceive(NotificationCenter.default.publisher(for: .spotlightWindowDidPresent)) { _ in
             runRevealAnimation()
         }
+        // Suppress the spotlight controller's auto-hide while any sheet owns
+        // the panel. Otherwise a brief focus blip from the sheet's own
+        // controls (or a system permission alert spawned by the sheet's
+        // initial work, e.g. IOBluetooth in DevicesSheet) hides the window
+        // mid-interaction.
+        .onChange(of: isSheetActive) { _, active in
+            SpotlightWindowController.shared.suppressAutoHide = active || state.isShowingFirstRunSetup
+        }
+        .onChange(of: state.isShowingFirstRunSetup) { _, showing in
+            SpotlightWindowController.shared.suppressAutoHide = showing || isSheetActive
+        }
     }
 
     private var footerBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             footerGroup(key: "Return", label: editingRule == nil ? "Edit Rule" : "Edit Rule")
 
             footerDivider
@@ -118,13 +134,21 @@ struct MainWindowView: View {
             Spacer()
 
             Text(footerHint)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(OtoUI.mutedFG)
                 .lineLimit(1)
         }
-        .padding(.horizontal, 22)
+        .padding(.horizontal, 12)
         .frame(width: OtoUI.pillWidth, height: OtoUI.spotlightFooterHeight)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: OtoUI.panelRadius, style: .continuous))
+        // Tint stacked in the BACKGROUND alongside the material so it sits
+        // behind the footer text/keys, not over them.
+        .background {
+            let shape = RoundedRectangle(cornerRadius: OtoUI.panelRadius, style: .continuous)
+            ZStack {
+                shape.fill(.thickMaterial)
+                shape.fill(OtoUI.panelTint)
+            }
+        }
         .overlay {
             RoundedRectangle(cornerRadius: OtoUI.panelRadius, style: .continuous)
                 .strokeBorder(OtoUI.strokeColor, lineWidth: OtoUI.strokeWidth)
@@ -145,31 +169,31 @@ struct MainWindowView: View {
     }
 
     private func footerGroup(key: String, label: String) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             footerKey(key)
             Text(label)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.primary)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(OtoUI.primaryFG)
         }
     }
 
     private func footerKey(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 11, weight: .semibold))
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(OtoUI.primaryFG)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
             .background(OtoUI.rowIdle, in: RoundedRectangle(cornerRadius: OtoUI.buttonRadius, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: OtoUI.buttonRadius, style: .continuous)
-                    .strokeBorder(OtoUI.dividerColor, lineWidth: 1)
+                    .strokeBorder(OtoUI.strokeColor, lineWidth: 1)
             }
     }
 
     private var footerDivider: some View {
         Rectangle()
             .fill(OtoUI.dividerColor)
-            .frame(width: 1, height: 20)
+            .frame(width: 1, height: 14)
     }
 
     private func triggerSummary(for rule: Rule) -> String {
@@ -384,7 +408,7 @@ struct FilterTabsBar: View {
             Spacer()
             if filter != .all {
                 Text("Drag to reorder available in All")
-                    .font(.system(size: 11))
+                    .font(.system(size: 10))
                     .foregroundStyle(OtoUI.mutedFG)
             }
             QuietHoursStatusChip()
@@ -407,21 +431,21 @@ struct FilterTabsBar: View {
                 filter = f
             }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: 5) {
                 Text(f.label)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                 Text("\(count(for: f))")
-                    .font(.system(size: 11))
-                    .padding(.horizontal, 6)
+                    .font(.system(size: 10))
+                    .padding(.horizontal, 5)
                     .padding(.vertical, 1)
                     .background(isOn ? tint.opacity(0.18) : OtoUI.rowIdle, in: Capsule())
                 if showActionHint, let icon = action?.iconName {
-                    OtoIcon(name: icon, size: 9)
+                    OtoIcon(name: icon, size: 8)
                         .transition(.opacity.combined(with: .scale))
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
             .background(isOn ? tint.opacity(0.18) : Color.clear, in: Capsule())
             .overlay {
                 Capsule()
@@ -494,19 +518,19 @@ private struct QuietHoursStatusChip: View {
         Button {
             state.quietHours.settings.enabled.toggle()
         } label: {
-            HStack(spacing: 5) {
-                OtoIcon(name: inWindow ? "moon.stars.fill" : "moon.stars", size: 11)
+            HStack(spacing: 4) {
+                OtoIcon(name: inWindow ? "moon.stars.fill" : "moon.stars", size: 10)
                 Text("Quiet hours")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 10, weight: .medium))
                 if inWindow {
                     Circle()
                         .fill(Color.otoTeal)
-                        .frame(width: 5, height: 5)
+                        .frame(width: 4, height: 4)
                         .accessibilityHidden(true)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
             .background(
                 settings.enabled ? tint.opacity(0.16) : Color.clear,
                 in: Capsule()
@@ -565,3 +589,34 @@ private struct QuietHoursStatusChip: View {
         return f.string(from: date)
     }
 }
+
+#if DEBUG
+#Preview("Spotlight — empty") {
+    MainWindowView()
+        .environment(AppState.previewEmpty)
+        .frame(width: 712, height: 620)
+}
+
+#Preview("Spotlight — populated") {
+    MainWindowView()
+        .environment(AppState.previewPopulated)
+        .frame(width: 712, height: 620)
+}
+#endif
+
+#if DEBUG
+private struct FilterTabsBarPreviewWrapper: View {
+    @State private var filter: RuleFilter = .all
+    var body: some View {
+        FilterTabsBar(filter: $filter)
+            .environment(AppState.previewPopulated)
+            .padding(40)
+            .background(Color.black.opacity(0.92))
+            .preferredColorScheme(.dark)
+    }
+}
+
+#Preview("Filter tabs bar") {
+    FilterTabsBarPreviewWrapper()
+}
+#endif
