@@ -54,6 +54,18 @@
 
 ---
 
+## `📽️` `Screenshots`
+
+Menu Bar             |  Spotlight Panel       |   New Rule
+:-------------------------:|:-------------------------:|:-------------------------:|
+![Menu Bar](https://github.com/0xAdiyat/Oto/blob/main/screenshots/menu-bar.png?raw=true)|![Spotlight Panel](https://github.com/0xAdiyat/Oto/blob/main/screenshots/main-spotlight-screen.png?raw=true)|![New Rule](https://github.com/0xAdiyat/Oto/blob/main/screenshots/new-rule.png?raw=true)|
+
+Devices             |  Empty State
+:-------------------------:|:-------------------------:|
+![Devices](https://github.com/0xAdiyat/Oto/blob/main/screenshots/devices.png?raw=true)|![Empty State](https://github.com/0xAdiyat/Oto/blob/main/screenshots/empty-state.png?raw=true)|
+
+---
+
 ## `💡` `Why Oto Exists`
 
 > You have a dedicated external mic. It sounds great. You use it for every call, every recording, every voice message.
