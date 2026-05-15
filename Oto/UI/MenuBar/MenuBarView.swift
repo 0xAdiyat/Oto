@@ -37,6 +37,9 @@ struct MenuBarView: View {
             connectedInputsSection
 
             divider
+            NetworkSpeedSection()
+
+            divider
             footer
         }
         .padding(14)
@@ -138,15 +141,24 @@ struct MenuBarView: View {
 
     private var connectedInputsSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Connected Inputs")
-                .font(.system(size: 11))
-                .foregroundStyle(OtoUI.mutedFG)
-
-            if otherInputs.isEmpty {
-                Text("No other inputs connected.")
+            HStack {
+                Text("Connected Inputs")
                     .font(.system(size: 11))
                     .foregroundStyle(OtoUI.mutedFG)
-                    .padding(.vertical, 4)
+                Spacer()
+                if !otherInputs.isEmpty {
+                    Text("\(otherInputs.count)")
+                        .font(.system(size: 10, weight: .semibold))
+                        .monospacedDigit()
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1)
+                        .background(OtoUI.rowIdle, in: Capsule())
+                        .foregroundStyle(OtoUI.secondaryFG)
+                }
+            }
+
+            if otherInputs.isEmpty {
+                EmptyInputsRow()
             } else {
                 ForEach(otherInputs) { device in
                     DeviceRow(device: device) {
@@ -356,6 +368,42 @@ private struct QuietHoursMenuBarToggle: View {
         let f = DateFormatter()
         f.timeStyle = .short
         return f.string(from: date)
+    }
+}
+
+/// Ghost-row placeholder shown when no secondary input devices are connected.
+/// Mirrors `DeviceRow`'s geometry (icon tile + two-line label, same vertical
+/// rhythm) so the "empty" state reads as "this is where a device would
+/// appear", not as a layout glitch or error. The icon tile is neutral
+/// (no tint color, dashed border) which signals "slot, not data".
+private struct EmptyInputsRow: View {
+    var body: some View {
+        HStack(spacing: 10) {
+            OtoIcon(name: "cable.connector", size: 14)
+                .frame(width: 32, height: 32)
+                .background(OtoUI.rowIdle, in: RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(
+                            OtoUI.dividerColor,
+                            style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+                        )
+                }
+                .foregroundStyle(OtoUI.mutedFG)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Only one input connected")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(OtoUI.secondaryFG)
+                Text("Plug in another mic to switch between them")
+                    .font(.system(size: 10))
+                    .foregroundStyle(OtoUI.mutedFG)
+                    .lineLimit(1)
+            }
+            Spacer()
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("No other input devices connected. Plug in another microphone to switch between them.")
     }
 }
 

@@ -40,9 +40,18 @@ struct OtoSettingsView: View {
         VStack(spacing: 0) {
             settingsHeader
 
-            Rectangle()
-                .fill(OtoSettingsUI.glassStroke)
-                .frame(height: 1)
+            // Soft hairline: the previous hard 1px rectangle drew an obvious
+            // seam between the tab strip and the content area. A 12pt gradient
+            // that fades the same hairline colour to clear gives the
+            // separation cue without the seam — matches the spotlight panel
+            // which never uses hard horizontal rules inside its glass.
+            LinearGradient(
+                colors: [OtoSettingsUI.glassStroke, .clear],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 12)
+            .allowsHitTesting(false)
 
             ScrollView {
                 VStack(alignment: .center, spacing: OtoSettingsUI.sectionSpacing) {
@@ -56,17 +65,10 @@ struct OtoSettingsView: View {
             .background(Color.clear)
         }
         .frame(width: OtoSettingsUI.windowWidth, height: OtoSettingsUI.windowHeight)
-        .background(.ultraThinMaterial)
-        .background(Color.otoSettingsSurface.opacity(0.96))
-        .overlay(alignment: .top) {
-            LinearGradient(
-                colors: [OtoSettingsUI.glassHighlight, .clear],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 140)
-            .allowsHitTesting(false)
-        }
+        // Single solid surface, Notion-style. No material stack, no top
+        // highlight gradient — the previous compound made the window read
+        // as "fancy glass" when the request is "calm dark page".
+        .background(Color.otoSettingsSurface)
         .overlay {
             Rectangle()
                 .strokeBorder(OtoSettingsUI.glassStroke, lineWidth: 1)
@@ -202,15 +204,7 @@ private struct GeneralSettingsContent: View {
                         SpotlightWindowController.shared.present(activate: true)
                         state.presentFirstRunSetup()
                     } label: {
-                        HStack {
-                            Text("Run setup again")
-                            Spacer()
-                            OtoIcon(name: "arrow.up.right", size: 11)
-                        }
-                        .padding(.horizontal, 12)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 30)
-                        .background(OtoSettingsUI.controlFill, in: RoundedRectangle(cornerRadius: OtoSettingsUI.controlRadius, style: .continuous))
+                        SettingsLinkButtonContent(label: "Run setup again")
                     }
                     .buttonStyle(.plain)
                 }
@@ -539,7 +533,10 @@ private struct QuietHoursSettingsContent: View {
                 }
             }
 
-            SettingsContentSection(title: "Volume Cap") {
+            SettingsContentSection(
+                title: "Volume Cap",
+                footnote: "Attempts above the cap reset automatically."
+            ) {
                 SettingsFieldRow(label: "Max volume") {
                     HStack(spacing: 12) {
                         Slider(value: $quietHours.settings.maxVolume, in: 0.05...1.0, step: 0.05)
@@ -550,13 +547,6 @@ private struct QuietHoursSettingsContent: View {
                             .foregroundStyle(OtoSettingsUI.valueFG)
                     }
                     .disabled(!quietHours.settings.enabled)
-                }
-
-                SettingsFieldRow(label: "Behavior") {
-                    Text("Attempts above the cap reset automatically.")
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(OtoSettingsUI.quietFG)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -602,7 +592,10 @@ private struct NotificationsSettingsContent: View {
 
     var body: some View {
         VStack(spacing: OtoSettingsUI.sectionSpacing) {
-            SettingsContentSection(title: "Rule Events") {
+            SettingsContentSection(
+                title: "Rule Events",
+                footnote: "Show a small banner when Oto applies a rule."
+            ) {
                 SettingsFieldRow(label: "Notify on apply") {
                     Toggle("", isOn: $showNotifications)
                         .toggleStyle(.switch)
@@ -614,17 +607,13 @@ private struct NotificationsSettingsContent: View {
                             Task { status = await NotificationService.shared.authorizationStatus() }
                         }
                 }
-
-                SettingsFieldRow(label: "Status") {
-                    Text(notificationSubtitle)
-                        .font(.system(size: 12, weight: .regular))
-                        .foregroundStyle(status == .denied ? Color.otoYellow : OtoSettingsUI.quietFG)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
             }
 
             if status == .denied {
-                SettingsContentSection(title: "Permission") {
+                SettingsContentSection(
+                    title: "Permission",
+                    footnote: "Notifications are disabled in System Settings — Oto can't show banners until you enable them."
+                ) {
                     SettingsFieldRow(label: "macOS") {
                         Button("Open System Settings") {
                             if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") {
@@ -640,12 +629,6 @@ private struct NotificationsSettingsContent: View {
             Task { status = await NotificationService.shared.authorizationStatus() }
         }
     }
-
-    private var notificationSubtitle: String {
-        status == .denied
-            ? "Notifications are disabled in System Settings."
-            : "Show a small banner when Oto applies a rule."
-    }
 }
 
 // MARK: - Hotkey
@@ -654,19 +637,15 @@ private struct HotkeySettingsContent: View {
     @State private var current: HotkeyShortcut?
 
     var body: some View {
-        SettingsContentSection(title: "Global Shortcut") {
+        SettingsContentSection(
+            title: "Global Shortcut",
+            footnote: "Summon the spotlight panel from anywhere."
+        ) {
             SettingsFieldRow(label: "Open Oto") {
                 HotkeyRecorder(shortcut: $current) { new in
                     GlobalHotkeyManager.shared.update(new)
                     current = GlobalHotkeyManager.shared.shortcut
                 }
-            }
-
-            SettingsFieldRow(label: "Behavior") {
-                Text("Summon the spotlight panel from anywhere.")
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(OtoSettingsUI.quietFG)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .onAppear { current = GlobalHotkeyManager.shared.shortcut }
@@ -679,7 +658,10 @@ private struct AboutSettingsContent: View {
     private static let repoURL = URL(string: "https://github.com/0xadiyat/oto")!
 
     var body: some View {
-        SettingsContentSection(title: "About Oto") {
+        SettingsContentSection(
+            title: "About Oto",
+            footnote: "Copyright © 2026 0xAdiyat."
+        ) {
             SettingsFieldRow(label: "Version") {
                 HStack(spacing: 12) {
                     Image("LogoMark")
@@ -701,25 +683,10 @@ private struct AboutSettingsContent: View {
 
             SettingsFieldRow(label: "Source") {
                 Link(destination: Self.repoURL) {
-                    HStack {
-                        Text("View Oto on GitHub")
-                        Spacer()
-                        OtoIcon(name: "arrow.up.right", size: 11)
-                    }
-                    .padding(.horizontal, 12)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 30)
-                    .background(OtoSettingsUI.controlFill, in: RoundedRectangle(cornerRadius: OtoSettingsUI.controlRadius, style: .continuous))
+                    SettingsLinkButtonContent(label: "View Oto on GitHub")
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(OtoSettingsUI.valueFG)
-            }
-
-            SettingsFieldRow(label: "Copyright") {
-                Text("Copyright © 2026 0xAdiyat.")
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(OtoSettingsUI.quietFG)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
@@ -734,11 +701,20 @@ private struct AboutSettingsContent: View {
 
 // MARK: - Shared Settings Components
 
-/// Grouped settings card with an optional small uppercase header. Replaces
-/// the previous full-width-divider layout — gives the form structure and
-/// makes related fields read as a unit.
+/// Grouped settings card with an optional small uppercase header.
+///
+/// Notion-style flat aesthetic: one solid surface that's barely a shade
+/// lighter than the page, a single hairline border, nothing else. No
+/// material, no tint, no top-highlight gradient, no drop shadow. The
+/// visual hierarchy comes from the section title above and the footnote
+/// below — typography carries the structure, not chrome.
+///
+/// `footnote` renders below the card as small muted text — the right
+/// place for non-actionable descriptions like "Attempts above the cap
+/// reset automatically".
 private struct SettingsContentSection<Content: View>: View {
     var title: String? = nil
+    var footnote: String? = nil
     var verticalPadding: CGFloat = 14
     @ViewBuilder let content: Content
 
@@ -752,19 +728,60 @@ private struct SettingsContentSection<Content: View>: View {
                     .padding(.leading, 4)
             }
 
+            let shape = RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous)
             VStack(spacing: 4) {
                 content
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, verticalPadding)
             .padding(.horizontal, 14)
-            .background(OtoSettingsUI.cardFill, in: RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous))
+            .background(OtoSettingsUI.cardFill, in: shape)
             .overlay {
-                RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous)
-                    .strokeBorder(OtoSettingsUI.glassStroke, lineWidth: 1)
+                shape.strokeBorder(OtoSettingsUI.glassStroke, lineWidth: 1)
+            }
+
+            if let footnote {
+                Text(footnote)
+                    .font(.system(size: 11))
+                    .foregroundStyle(OtoSettingsUI.quietFG)
+                    .padding(.horizontal, 4)
+                    .padding(.top, 2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(maxWidth: OtoSettingsUI.contentMaxWidth)
+    }
+}
+
+/// Full-width pill-button content used by link/action rows (Run setup again,
+/// View Oto on GitHub). Renders the label + a trailing "↗" affordance, with
+/// a hover state so the row feels live instead of like a static label. The
+/// caller wraps it in a Button/Link with `.buttonStyle(.plain)` so its own
+/// click area covers the whole pill.
+private struct SettingsLinkButtonContent: View {
+    let label: String
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 12.5, weight: .medium))
+            Spacer()
+            OtoIcon(name: "arrow.up.right", size: 11)
+                .foregroundStyle(OtoSettingsUI.quietFG)
+                .opacity(isHovering ? 1 : 0.7)
+        }
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity)
+        .frame(height: 30)
+        .background(
+            isHovering ? OtoSettingsUI.tabHover : OtoSettingsUI.controlFill,
+            in: RoundedRectangle(cornerRadius: OtoSettingsUI.controlRadius, style: .continuous)
+        )
+        .foregroundStyle(OtoSettingsUI.valueFG)
+        .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
+        .animation(OtoUI.hoverEase, value: isHovering)
     }
 }
 
@@ -783,9 +800,10 @@ private struct SettingsFieldRow<Content: View>: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(OtoSettingsUI.valueFG)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .frame(minHeight: 32)
+                .frame(minHeight: 36)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 2)
     }
 }
 
