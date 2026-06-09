@@ -29,11 +29,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             SpotlightWindowController.shared.toggle()
         }
 
-        // First-run setup: present the Spotlight panel with a guided overlay
-        // instead of only opening an empty window.
-        if !UserDefaults.standard.bool(forKey: AppState.firstRunSetupCompletedKey) {
-            state.presentFirstRunSetup()
-            SpotlightWindowController.shared.present(activate: true)
+        // First-run: present the wellbeing onboarding (the primary setup flow).
+        // The audio first-run wizard remains reachable from Settings.
+        if !state.hasCompletedOnboarding {
+            state.presentOnboarding()
         }
     }
 
@@ -58,10 +57,8 @@ struct OtoApp: App {
             })
             .environment(appDelegate.state)
         } label: {
-            Image("MenuBarIcon")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 16, height: 16)
+            MenuBarLabel()
+                .environment(appDelegate.state)
         }
         .menuBarExtraStyle(.window)
 

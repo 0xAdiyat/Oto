@@ -8,6 +8,10 @@ struct MenuBarView: View {
     @Environment(\.openSettings) private var openSettings
     let openMain: () -> Void
 
+    @State private var genre: MenuGenre = .focus
+
+    private enum MenuGenre: Hashable { case focus, audio }
+
     private func openMainAndDismiss() {
         dismiss()
         openMain()
@@ -25,26 +29,41 @@ struct MenuBarView: View {
         VStack(spacing: 10) {
             header
 
-            if !state.store.profiles.isEmpty {
-                divider
-                profileSection
+            SegmentedPill(
+                items: [(.focus, "Focus"), (.audio, "Audio")],
+                selection: $genre,
+                fillWidth: true
+            )
+
+            switch genre {
+            case .focus:
+                FocusMenuSection()
+            case .audio:
+                audioSections
             }
-
-            divider
-            currentInputSection
-
-            divider
-            connectedInputsSection
-
-            divider
-            NetworkSpeedSection()
 
             divider
             footer
         }
         .padding(14)
-        .frame(width: 340)
+        .frame(width: 470)
         .focusEffectDisabled()
+    }
+
+    @ViewBuilder
+    private var audioSections: some View {
+        if !state.store.profiles.isEmpty {
+            profileSection
+            divider
+        }
+
+        currentInputSection
+
+        divider
+        connectedInputsSection
+
+        divider
+        NetworkSpeedSection()
     }
 
     private var divider: some View {

@@ -252,7 +252,10 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				"INFOPLIST_KEY_LSUIElement[sdk=macosx*]" = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Oto reads the active tab's address from the browsers you enable, to show your website usage stats. Browsing data stays on your Mac.";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Oto reads the list of paired Bluetooth devices so it can show which keyboards, mice, and headsets are currently connected. No data leaves your Mac.";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Oto checks for ongoing calendar events so Smart Pause can pause your screen breaks during meetings. Event details stay on your Mac.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "Oto checks for ongoing calendar events so Smart Pause can pause your screen breaks during meetings. Event details stay on your Mac.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Oto uses the microphone only when you preview your input level or run the Test Microphone feature. Audio is never recorded or sent off your Mac.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -298,7 +301,10 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				"INFOPLIST_KEY_LSUIElement[sdk=macosx*]" = YES;
+				INFOPLIST_KEY_NSAppleEventsUsageDescription = "Oto reads the active tab's address from the browsers you enable, to show your website usage stats. Browsing data stays on your Mac.";
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "Oto reads the list of paired Bluetooth devices so it can show which keyboards, mice, and headsets are currently connected. No data leaves your Mac.";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Oto checks for ongoing calendar events so Smart Pause can pause your screen breaks during meetings. Event details stay on your Mac.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "Oto checks for ongoing calendar events so Smart Pause can pause your screen breaks during meetings. Event details stay on your Mac.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Oto uses the microphone only when you preview your input level or run the Test Microphone feature. Audio is never recorded or sent off your Mac.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;

@@ -3,33 +3,77 @@ import SwiftUI
 import UserNotifications
 
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case general, automation, devices, quietHours, notifications, hotkey, about
+    case general
+    case screenBreaks, smartPause, wellnessReminders, stats
+    case alerts, sounds, hotkey
+    case automation, devices, quietHours, notifications
+    case about
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .general: return "General"
+        case .screenBreaks: return "Screen Breaks"
+        case .smartPause: return "Smart Pause"
+        case .wellnessReminders: return "Wellness Reminders"
+        case .stats: return "Stats"
+        case .alerts: return "Alerts / Nudges"
+        case .sounds: return "Sounds"
+        case .hotkey: return "Keyboard Shortcuts"
         case .automation: return "Automation"
-        case .devices: return "Devices"
+        case .devices: return "Audio Devices"
         case .quietHours: return "Quiet Hours"
         case .notifications: return "Notifications"
-        case .hotkey: return "Hotkey"
         case .about: return "About"
         }
     }
 
     var icon: String {
         switch self {
-        case .general: return "gearshape"
+        case .general: return "gearshape.fill"
+        case .screenBreaks: return "leaf.fill"
+        case .smartPause: return "pause.fill"
+        case .wellnessReminders: return "heart.fill"
+        case .stats: return "chart.bar.fill"
+        case .alerts: return "bell.badge.fill"
+        case .sounds: return "speaker.wave.2.fill"
+        case .hotkey: return "command"
         case .automation: return "wand.and.stars"
         case .devices: return "headphones"
-        case .quietHours: return "moon.zzz"
-        case .notifications: return "bell"
-        case .hotkey: return "command"
-        case .about: return "info.circle"
+        case .quietHours: return "moon.zzz.fill"
+        case .notifications: return "bell.fill"
+        case .about: return "info.circle.fill"
         }
     }
+
+    /// Tint for the sidebar icon tile (the colourful rounded squares).
+    var tint: Color {
+        switch self {
+        case .general: return .otoNavy
+        case .screenBreaks: return .otoTeal
+        case .smartPause: return .otoNavy
+        case .wellnessReminders: return .otoSage
+        case .stats: return .otoAlert
+        case .alerts: return .otoYellow
+        case .sounds: return .otoYellow
+        case .hotkey: return .otoNavy
+        case .automation: return .otoTeal
+        case .devices: return .otoSage
+        case .quietHours: return .otoNavy
+        case .notifications: return .otoYellow
+        case .about: return .otoYellow
+        }
+    }
+
+    /// Grouped layout for the sidebar (header title, then its rows).
+    static let groups: [(title: String?, sections: [SettingsSection])] = [
+        (nil, [.general]),
+        ("Focus & Wellbeing", [.screenBreaks, .smartPause, .wellnessReminders, .stats]),
+        ("Behavior & Feedback", [.alerts, .sounds, .hotkey]),
+        ("Integrations", [.automation, .devices, .quietHours, .notifications]),
+        ("Oto", [.about]),
+    ]
 }
 
 struct OtoSettingsView: View {
@@ -37,38 +81,20 @@ struct OtoSettingsView: View {
     @State private var selected: SettingsSection = .general
 
     var body: some View {
-        VStack(spacing: 0) {
-            settingsHeader
+        HStack(spacing: 0) {
+            sidebar
 
-            // Soft hairline: the previous hard 1px rectangle drew an obvious
-            // seam between the tab strip and the content area. A 12pt gradient
-            // that fades the same hairline colour to clear gives the
-            // separation cue without the seam — matches the spotlight panel
-            // which never uses hard horizontal rules inside its glass.
-            LinearGradient(
-                colors: [OtoSettingsUI.glassStroke, .clear],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 12)
-            .allowsHitTesting(false)
+            Rectangle()
+                .fill(OtoSettingsUI.glassStroke)
+                .frame(width: 1)
+                .allowsHitTesting(false)
 
-            ScrollView {
-                VStack(alignment: .center, spacing: OtoSettingsUI.sectionSpacing) {
-                    selectedContent
-                    Spacer(minLength: 0)
-                }
-                .padding(.top, OtoSettingsUI.contentTopPadding)
-                .padding(.bottom, 28)
-                .frame(maxWidth: .infinity, alignment: .top)
-            }
-            .background(Color.clear)
+            contentPane
         }
-        .frame(width: OtoSettingsUI.windowWidth, height: OtoSettingsUI.windowHeight)
-        // Single solid surface, Notion-style. No material stack, no top
-        // highlight gradient — the previous compound made the window read
-        // as "fancy glass" when the request is "calm dark page".
-        .background(Color.otoSettingsSurface)
+        .frame(width: OtoSettingsUI.windowWidth, height: 700)
+        // Real window vibrancy — the desktop shows through the translucent
+        // material (LookAway-style), replacing the former opaque flat surface.
+        .otoVibrantBackground(.underWindowBackground)
         .overlay {
             Rectangle()
                 .strokeBorder(OtoSettingsUI.glassStroke, lineWidth: 1)
@@ -80,48 +106,94 @@ struct OtoSettingsView: View {
         .background(SettingsWindowConfigurator())
     }
 
-    private var settingsHeader: some View {
-        // Single compact tab strip — the window title bar already announces
-        // "Oto Settings", so the duplicate inline title is redundant. Removing
-        // it gives the tabs proper vertical breathing room without inflating
-        // the toolbar height.
-        HStack(spacing: 4) {
-            ForEach(SettingsSection.allCases) { section in
-                SettingsTopTab(
-                    section: section,
-                    isSelected: selected == section
-                ) {
-                    selected = section
+    // MARK: Sidebar
+
+    private var sidebar: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                ForEach(Array(SettingsSection.groups.enumerated()), id: \.offset) { _, group in
+                    VStack(alignment: .leading, spacing: 3) {
+                        if let title = group.title {
+                            Text(title.uppercased())
+                                .font(.system(size: 10, weight: .semibold))
+                                .tracking(0.7)
+                                .foregroundStyle(OtoSettingsUI.quietFG)
+                                .padding(.leading, 10)
+                                .padding(.bottom, 2)
+                        }
+                        ForEach(group.sections) { section in
+                            SettingsSidebarItem(
+                                section: section,
+                                isSelected: selected == section
+                            ) { selected = section }
+                        }
+                    }
                 }
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 16)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .center)
-        .frame(height: OtoSettingsUI.topBarHeight)
-        .background(Color.otoSettingsSurface.opacity(0.42))
+        .frame(width: 236)
+        // Vibrant sidebar material, like native macOS source lists.
+        .background(VisualEffectBackground(material: .sidebar, isEmphasized: false))
+    }
+
+    // MARK: Content
+
+    private var contentPane: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Page header — colourful icon tile + section title.
+            HStack(spacing: 12) {
+                SettingsTileIcon(name: selected.icon, tint: selected.tint, size: 30)
+                Text(selected.title)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(OtoUI.primaryFG)
+                Spacer()
+            }
+            .padding(.horizontal, 28)
+            .frame(height: 72)
+
+            Rectangle()
+                .fill(OtoSettingsUI.glassStroke)
+                .frame(height: 1)
+                .allowsHitTesting(false)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: OtoSettingsUI.sectionSpacing) {
+                    selectedContent
+                }
+                .padding(.horizontal, 28)
+                .padding(.top, 22)
+                .padding(.bottom, 32)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
     private var selectedContent: some View {
         switch selected {
-        case .general:
-            GeneralSettingsContent()
-        case .automation:
-            AutomationSettingsContent()
-        case .devices:
-            DeviceSettingsContent()
-        case .quietHours:
-            QuietHoursSettingsContent()
-        case .notifications:
-            NotificationsSettingsContent()
-        case .hotkey:
-            HotkeySettingsContent()
-        case .about:
-            AboutSettingsContent()
+        case .general:           GeneralSettingsContent()
+        case .screenBreaks:      ScreenBreaksSettingsContent()
+        case .smartPause:        SmartPauseSettingsContent()
+        case .wellnessReminders: WellnessRemindersSettingsContent()
+        case .stats:             StatsSettingsContent()
+        case .alerts:            AlertsSettingsContent()
+        case .sounds:            SoundsSettingsContent()
+        case .hotkey:            HotkeySettingsContent()
+        case .automation:        AutomationSettingsContent()
+        case .devices:           DeviceSettingsContent()
+        case .quietHours:        QuietHoursSettingsContent()
+        case .notifications:     NotificationsSettingsContent()
+        case .about:             AboutSettingsContent()
         }
     }
 }
 
-private struct SettingsTopTab: View {
+/// A sidebar row: colourful icon tile + label, with hover/selected fill.
+private struct SettingsSidebarItem: View {
     let section: SettingsSection
     let isSelected: Bool
     let action: () -> Void
@@ -130,42 +202,48 @@ private struct SettingsTopTab: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 6) {
-                OtoIcon(name: section.icon, size: 14)
-                    .foregroundStyle(iconColor)
-                    .frame(height: 16)
+            HStack(spacing: 10) {
+                SettingsTileIcon(name: section.icon, tint: section.tint, size: 22)
                 Text(section.title)
-                    .font(.system(size: 11.5, weight: isSelected ? .semibold : .medium))
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                    .foregroundStyle(isSelected ? OtoUI.primaryFG : OtoSettingsUI.valueFG)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.78)
+                Spacer(minLength: 0)
             }
-            .frame(width: OtoSettingsUI.topTabWidth, height: OtoSettingsUI.topTabHeight)
-            .background(rowFill, in: RoundedRectangle(cornerRadius: OtoSettingsUI.controlRadius, style: .continuous))
-            .foregroundStyle(labelColor)
-            .contentShape(RoundedRectangle(cornerRadius: OtoSettingsUI.controlRadius, style: .continuous))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(
+                isSelected ? OtoSettingsUI.tabSelected : (isHovering ? OtoSettingsUI.tabHover : Color.clear),
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
         .animation(OtoUI.hoverEase, value: isHovering)
-        .animation(OtoUI.hoverEase, value: isSelected)
     }
+}
 
-    /// Selected tab uses a teal-tinted pill fill — same brand language as the
-    /// spotlight panel's "All" filter chip — instead of an outline that read
-    /// as a stuck "pressed" state on the previous design.
-    private var rowFill: Color {
-        if isSelected { return Color.otoTeal.opacity(0.18) }
-        return isHovering ? OtoSettingsUI.tabHover : Color.clear
-    }
+/// The vivid rounded-square icon tile used in the sidebar and page header.
+struct SettingsTileIcon: View {
+    let name: String
+    let tint: Color
+    var size: CGFloat = 22
 
-    private var iconColor: Color {
-        if isSelected { return Color.otoTeal }
-        return OtoSettingsUI.quietFG
-    }
-
-    private var labelColor: Color {
-        if isSelected { return Color.otoTeal }
-        return OtoSettingsUI.quietFG
+    var body: some View {
+        RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [tint.opacity(0.95), tint.opacity(0.7)],
+                    startPoint: .top, endPoint: .bottom
+                )
+            )
+            .frame(width: size, height: size)
+            .overlay {
+                OtoIcon(name: name, size: size * 0.52, weight: .semibold)
+                    .foregroundStyle(.white)
+            }
+            .shadow(color: tint.opacity(0.3), radius: 2, y: 1)
     }
 }
 
@@ -174,9 +252,9 @@ private struct SettingsTopTab: View {
 private struct GeneralSettingsContent: View {
     @Environment(AppState.self) private var state
     @State private var launchAtLogin = LaunchAtLogin.isEnabled
-    @State private var currentHotkey: HotkeyShortcut?
 
     var body: some View {
+        @Bindable var wellness = state.wellness
         VStack(spacing: OtoSettingsUI.sectionSpacing) {
             SettingsContentSection(title: "Startup") {
                 SettingsFieldRow(label: "Launch at login") {
@@ -188,23 +266,65 @@ private struct GeneralSettingsContent: View {
                             launchAtLogin = LaunchAtLogin.isEnabled
                         }
                 }
+            }
 
-                SettingsFieldRow(label: "Hotkey") {
-                    HotkeyRecorder(shortcut: $currentHotkey) { new in
-                        GlobalHotkeyManager.shared.update(new)
-                        currentHotkey = GlobalHotkeyManager.shared.shortcut
+            SettingsContentSection(title: "Menu bar") {
+                MenuBarPreview()
+                    .padding(.bottom, 4)
+                HStack(alignment: .top, spacing: 12) {
+                    MenuBarOptionColumn(title: "Live Status", isOn: $wellness.settings.breaksEnabled) {
+                        MenuBarMiniRow(label: "Display") {
+                            Picker("", selection: $wellness.settings.menuBarDisplay) {
+                                ForEach(WellnessSettings.MenuBarDisplay.allCases, id: \.self) {
+                                    Text($0.label).tag($0)
+                                }
+                            }
+                            .labelsHidden().fixedSize()
+                        }
+                        MenuBarMiniRow(label: "Timer style") {
+                            Picker("", selection: $wellness.settings.menuBarTimerStyle) {
+                                ForEach(WellnessSettings.MenuBarTimerStyle.allCases, id: \.self) {
+                                    Text($0.label).tag($0)
+                                }
+                            }
+                            .labelsHidden().fixedSize()
+                        }
+                    }
+                    MenuBarOptionColumn(title: "Screen Score", isOn: $wellness.settings.screenScoreEnabled) {
+                        MenuBarMiniRow(label: "Display") {
+                            Picker("", selection: $wellness.settings.screenScoreDisplay) {
+                                ForEach(WellnessSettings.MenuBarDisplay.allCases, id: \.self) {
+                                    Text($0.label).tag($0)
+                                }
+                            }
+                            .labelsHidden().fixedSize()
+                        }
+                        MenuBarMiniRow(label: "Colored rings") {
+                            Toggle("", isOn: $wellness.settings.screenScoreColoredRings)
+                                .toggleStyle(.switch).labelsHidden()
+                        }
                     }
                 }
             }
 
+            UpdatesSettingsSection()
+
             SettingsContentSection(title: "Onboarding") {
-                SettingsFieldRow(label: "First-run setup") {
+                SettingsFieldRow(label: "Setup") {
+                    Button {
+                        state.presentOnboarding()
+                    } label: {
+                        SettingsLinkButtonContent(label: "Run onboarding again")
+                    }
+                    .buttonStyle(.plain)
+                }
+                SettingsFieldRow(label: "Audio setup") {
                     Button {
                         NSApp.keyWindow?.close()
                         SpotlightWindowController.shared.present(activate: true)
                         state.presentFirstRunSetup()
                     } label: {
-                        SettingsLinkButtonContent(label: "Run setup again")
+                        SettingsLinkButtonContent(label: "Set up audio automation")
                     }
                     .buttonStyle(.plain)
                 }
@@ -212,7 +332,87 @@ private struct GeneralSettingsContent: View {
         }
         .onAppear {
             launchAtLogin = LaunchAtLogin.isEnabled
-            currentHotkey = GlobalHotkeyManager.shared.shortcut
+        }
+    }
+}
+
+/// A titled, toggle-headed mini-card used by the General "Menu bar" block
+/// (Live Status / Screen Score columns), matching LookAway's layout.
+private struct MenuBarOptionColumn<Content: View>: View {
+    let title: String
+    @Binding var isOn: Bool
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(OtoUI.primaryFG)
+                Spacer()
+                Toggle("", isOn: $isOn).toggleStyle(.switch).labelsHidden()
+                    .scaleEffect(0.85)
+            }
+            content
+                .disabled(!isOn)
+                .opacity(isOn ? 1 : 0.5)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(OtoSettingsUI.subtleFill, in: RoundedRectangle(cornerRadius: OtoSettingsUI.controlRadius, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: OtoSettingsUI.controlRadius, style: .continuous)
+                .strokeBorder(OtoSettingsUI.glassStroke, lineWidth: 1)
+        }
+    }
+}
+
+/// Compact label-left / control-right row for the menu-bar option columns
+/// (narrower than `SettingsFieldRow`, which has a fixed wide label column).
+private struct MenuBarMiniRow<Content: View>: View {
+    let label: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundStyle(OtoSettingsUI.labelFG)
+            Spacer(minLength: 6)
+            content
+        }
+        .frame(minHeight: 28)
+    }
+}
+
+/// General → Updates: the Sparkle auto-update controls.
+private struct UpdatesSettingsSection: View {
+    private let updater = UpdateController.shared
+    @State private var autoCheck = UpdateController.shared.automaticallyChecksForUpdates
+    @State private var autoDownload = UpdateController.shared.automaticallyDownloadsUpdates
+
+    var body: some View {
+        SettingsContentSection(
+            title: "Updates",
+            footnote: updater.isAvailable
+                ? nil
+                : "The updater isn't bundled in this build yet — add the Sparkle package to enable update delivery."
+        ) {
+            SettingsFieldRow(label: "Automatically check for updates") {
+                Toggle("", isOn: $autoCheck)
+                    .toggleStyle(.switch).labelsHidden()
+                    .onChange(of: autoCheck) { _, v in updater.automaticallyChecksForUpdates = v }
+            }
+            SettingsFieldRow(label: "Automatically download updates") {
+                Toggle("", isOn: $autoDownload)
+                    .toggleStyle(.switch).labelsHidden()
+                    .onChange(of: autoDownload) { _, v in updater.automaticallyDownloadsUpdates = v }
+            }
+            SettingsFieldRow(label: "Updates") {
+                Button("Check for updates…") { updater.checkForUpdates() }
+                    .controlSize(.small)
+                    .disabled(!updater.isAvailable)
+            }
         }
     }
 }
@@ -553,7 +753,7 @@ private struct QuietHoursSettingsContent: View {
     }
 }
 
-private struct TimePickerRow: View {
+struct TimePickerRow: View {
     let label: String
     @Binding var minutes: Int
 
@@ -712,7 +912,7 @@ private struct AboutSettingsContent: View {
 /// `footnote` renders below the card as small muted text — the right
 /// place for non-actionable descriptions like "Attempts above the cap
 /// reset automatically".
-private struct SettingsContentSection<Content: View>: View {
+struct SettingsContentSection<Content: View>: View {
     var title: String? = nil
     var footnote: String? = nil
     var verticalPadding: CGFloat = 14
@@ -749,7 +949,7 @@ private struct SettingsContentSection<Content: View>: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .frame(maxWidth: OtoSettingsUI.contentMaxWidth)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -758,7 +958,7 @@ private struct SettingsContentSection<Content: View>: View {
 /// a hover state so the row feels live instead of like a static label. The
 /// caller wraps it in a Button/Link with `.buttonStyle(.plain)` so its own
 /// click area covers the whole pill.
-private struct SettingsLinkButtonContent: View {
+struct SettingsLinkButtonContent: View {
     let label: String
     @State private var isHovering = false
 
@@ -785,7 +985,7 @@ private struct SettingsLinkButtonContent: View {
     }
 }
 
-private struct SettingsFieldRow<Content: View>: View {
+struct SettingsFieldRow<Content: View>: View {
     let label: String
     @ViewBuilder let content: Content
 
