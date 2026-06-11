@@ -77,10 +77,6 @@ struct ScreenBreaksSettingsContent: View {
                 .padding(.vertical, 14)
                 .padding(.horizontal, 14)
                 .background(OtoSettingsUI.cardFill, in: RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous)
-                        .strokeBorder(OtoSettingsUI.glassStroke, lineWidth: 1)
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -161,9 +157,12 @@ private struct EnforcementCard: View {
             .padding(8)
             .frame(maxWidth: .infinity)
             .background(OtoSettingsUI.cardFill, in: RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous))
+            // Functional selected-state highlight (teal); no stroke when unselected.
             .overlay {
-                RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous)
-                    .strokeBorder(isSelected ? Color.otoTeal : OtoSettingsUI.glassStroke, lineWidth: isSelected ? 2 : 1)
+                if isSelected {
+                    RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous)
+                        .strokeBorder(Color.otoTeal, lineWidth: 2)
+                }
             }
             .contentShape(Rectangle())
         }
@@ -462,10 +461,6 @@ private struct ReminderColumn: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(OtoSettingsUI.cardFill, in: RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous)
-                .strokeBorder(OtoSettingsUI.glassStroke, lineWidth: 1)
-        }
     }
 }
 

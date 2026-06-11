@@ -11,11 +11,9 @@ struct MenuBarPreview: View {
         let countdown = state.breakManager.menuBarCountdown(style: s.menuBarTimerStyle)
 
         ZStack {
-            // The real desktop wallpaper as the section backdrop — the LookAway
-            // technique. Falls back to a gradient if it can't be read.
             DesktopWallpaperView(blurRadius: 12, scrim: 0.35)
 
-            VStack {
+            VStack(spacing: 0) {
                 HStack(spacing: 8) {
                     Image(systemName: "applelogo")
                         .font(.system(size: 12))
@@ -27,16 +25,14 @@ struct MenuBarPreview: View {
                     menuItem(countdown: countdown, settings: s)
                 }
                 .padding(.horizontal, 12)
-                .padding(.top, 8)
+                .frame(height: 28)
+                .background(Color.black.opacity(0.33))
+
                 Spacer()
             }
         }
-        .frame(height: 96)
+        .frame(height: 98)
         .clipShape(RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous)
-                .strokeBorder(OtoSettingsUI.glassStroke, lineWidth: 1)
-        }
     }
 
     @ViewBuilder
@@ -64,8 +60,8 @@ struct MenuBarPreview: View {
             }
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(.white.opacity(0.1), in: Capsule())
+        .frame(height: 20)
+        .background(.black.opacity(0.24), in: Capsule())
     }
 
 }

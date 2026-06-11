@@ -53,3 +53,43 @@ extension View {
         }
     }
 }
+
+// MARK: - Settings LookAway surfaces
+
+/// LookAway-style surface helpers for the Settings window. The shell and
+/// grouped panels stay translucent so the desktop influences the final color,
+/// while subtle graphite tints keep text contrast stable.
+extension View {
+    /// Window-level graphite glass backdrop.
+    func otoSettingsBackdrop() -> some View {
+        background {
+            ZStack {
+                VisualEffectBackground(material: .underWindowBackground, isEmphasized: true)
+                OtoSettingsUI.windowBase.opacity(0.34)
+            }
+            .ignoresSafeArea()
+        }
+    }
+
+    /// Grouped settings panel with a subtle hairline, matching the compact
+    /// macOS list cards in the reference.
+    func otoSectionCard(cornerRadius: CGFloat = OtoSettingsUI.cardRadius) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        return self
+            .background(.ultraThinMaterial, in: shape)
+            .background(OtoSettingsUI.panelSurface, in: shape)
+            .overlay { shape.strokeBorder(OtoSettingsUI.cardStroke, lineWidth: 1) }
+    }
+
+    /// Flat control surface for link/action pills. `interactive` lifts the fill
+    /// slightly for button-like controls.
+    func otoControlGlass<S: InsettableShape>(in shape: S, interactive: Bool = false) -> some View {
+        background(.ultraThinMaterial, in: shape)
+            .background(interactive ? OtoSettingsUI.panelSurfaceRaised : OtoSettingsUI.controlFill, in: shape)
+    }
+
+    /// Passthrough retained for call-site compatibility.
+    func otoGlassGroup(spacing: CGFloat = OtoSettingsUI.sectionSpacing) -> some View {
+        self
+    }
+}

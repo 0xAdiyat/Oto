@@ -47,22 +47,24 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Tint for the sidebar icon tile (the colourful rounded squares).
+    /// Tint for the sidebar / page-header icon tile (the colourful rounded
+    /// squares). A vivid, varied LookAway-style hue per section — independent
+    /// of the teal brand accent used by controls.
     var tint: Color {
         switch self {
-        case .general: return .otoNavy
-        case .screenBreaks: return .otoTeal
-        case .smartPause: return .otoNavy
-        case .wellnessReminders: return .otoSage
-        case .stats: return .otoAlert
-        case .alerts: return .otoYellow
-        case .sounds: return .otoYellow
-        case .hotkey: return .otoNavy
-        case .automation: return .otoTeal
-        case .devices: return .otoSage
-        case .quietHours: return .otoNavy
-        case .notifications: return .otoYellow
-        case .about: return .otoYellow
+        case .general: return .tilePurple
+        case .screenBreaks: return .tileGreen
+        case .smartPause: return .tileIndigo
+        case .wellnessReminders: return .tilePink
+        case .stats: return .tileCoral
+        case .alerts: return .tileOrange
+        case .sounds: return .tileAmber
+        case .hotkey: return .tileIndigo
+        case .automation: return .tileGreen
+        case .devices: return .tileBlue
+        case .quietHours: return .tileIndigo
+        case .notifications: return .tileCoral
+        case .about: return .tileAmber
         }
     }
 
@@ -83,24 +85,18 @@ struct OtoSettingsView: View {
     var body: some View {
         HStack(spacing: 0) {
             sidebar
-
-            Rectangle()
-                .fill(OtoSettingsUI.glassStroke)
-                .frame(width: 1)
-                .allowsHitTesting(false)
-
             contentPane
         }
-        .frame(width: OtoSettingsUI.windowWidth, height: 700)
-        // Real window vibrancy — the desktop shows through the translucent
-        // material (LookAway-style), replacing the former opaque flat surface.
-        .otoVibrantBackground(.underWindowBackground)
+        .frame(width: OtoSettingsUI.windowWidth, height: OtoSettingsUI.windowHeight)
+        .otoSettingsBackdrop()
+        .clipShape(RoundedRectangle(cornerRadius: OtoSettingsUI.windowRadius, style: .continuous))
         .overlay {
-            Rectangle()
-                .strokeBorder(OtoSettingsUI.glassStroke, lineWidth: 1)
+            RoundedRectangle(cornerRadius: OtoSettingsUI.windowRadius, style: .continuous)
+                .strokeBorder(OtoSettingsUI.windowBorder, lineWidth: 1)
                 .allowsHitTesting(false)
         }
-        .shadow(color: OtoSettingsUI.windowShadow, radius: 34, x: 0, y: 24)
+        .shadow(color: OtoSettingsUI.windowShadow, radius: 28, x: 0, y: 18)
+        .tint(.blue)
         .focusEffectDisabled()
         .suppressAppKitFocusRings()
         .background(SettingsWindowConfigurator())
@@ -109,67 +105,85 @@ struct OtoSettingsView: View {
     // MARK: Sidebar
 
     private var sidebar: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                ForEach(Array(SettingsSection.groups.enumerated()), id: \.offset) { _, group in
-                    VStack(alignment: .leading, spacing: 3) {
-                        if let title = group.title {
-                            Text(title.uppercased())
-                                .font(.system(size: 10, weight: .semibold))
-                                .tracking(0.7)
-                                .foregroundStyle(OtoSettingsUI.quietFG)
-                                .padding(.leading, 10)
-                                .padding(.bottom, 2)
-                        }
-                        ForEach(group.sections) { section in
-                            SettingsSidebarItem(
-                                section: section,
-                                isSelected: selected == section
-                            ) { selected = section }
+        ZStack {
+            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    LinearGradient(
+                        colors: [OtoSettingsUI.sidebarSurface, OtoSettingsUI.sidebarSurfaceDim],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        .strokeBorder(OtoSettingsUI.windowBorder.opacity(0.72), lineWidth: 1)
+                }
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: OtoSettingsUI.sidebarSectionSpacing) {
+                    ForEach(Array(SettingsSection.groups.enumerated()), id: \.offset) { _, group in
+                        VStack(alignment: .leading, spacing: 2) {
+                            if let title = group.title {
+                                Text(title)
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(OtoSettingsUI.tertiaryText)
+                                    .padding(.leading, 10)
+                                    .padding(.bottom, 4)
+                            }
+                            ForEach(group.sections) { section in
+                                SettingsSidebarItem(
+                                    section: section,
+                                    isSelected: selected == section
+                                ) { selected = section }
+                            }
                         }
                     }
                 }
+                .padding(.horizontal, 12)
+                // Keep real macOS traffic lights clear inside the glass panel.
+                .padding(.top, 46)
+                .padding(.bottom, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 16)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(width: 236)
-        // Vibrant sidebar material, like native macOS source lists.
-        .background(VisualEffectBackground(material: .sidebar, isEmphasized: false))
+        .frame(width: OtoSettingsUI.sidebarWidth)
+        .padding(.leading, 8)
+        .padding(.vertical, 8)
     }
 
     // MARK: Content
 
     private var contentPane: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Page header — colourful icon tile + section title.
-            HStack(spacing: 12) {
-                SettingsTileIcon(name: selected.icon, tint: selected.tint, size: 30)
+            HStack(spacing: 11) {
+                SettingsTileIcon(name: selected.icon, tint: selected.tint, size: 24)
                 Text(selected.title)
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(OtoUI.primaryFG)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(OtoSettingsUI.primaryText)
                 Spacer()
             }
-            .padding(.horizontal, 28)
-            .frame(height: 72)
-
-            Rectangle()
-                .fill(OtoSettingsUI.glassStroke)
-                .frame(height: 1)
-                .allowsHitTesting(false)
+            .padding(.horizontal, OtoSettingsUI.contentPadding)
+            .frame(height: OtoSettingsUI.topBarHeight)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(OtoSettingsUI.hairline)
+                    .frame(height: 1)
+                    .opacity(0.70)
+            }
 
             ScrollView {
                 VStack(alignment: .leading, spacing: OtoSettingsUI.sectionSpacing) {
                     selectedContent
                 }
-                .padding(.horizontal, 28)
-                .padding(.top, 22)
-                .padding(.bottom, 32)
+                .padding(.horizontal, OtoSettingsUI.contentPadding)
+                .padding(.top, OtoSettingsUI.contentTopPadding)
+                .padding(.bottom, 24)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .frame(maxWidth: .infinity)
+        .background(OtoSettingsUI.contentSurface)
     }
 
     @ViewBuilder
@@ -192,7 +206,8 @@ struct OtoSettingsView: View {
     }
 }
 
-/// A sidebar row: colourful icon tile + label, with hover/selected fill.
+/// A sidebar row matching the compact LookAway navigation: colorful square
+/// icon, dense label, and a soft rounded selected pill.
 private struct SettingsSidebarItem: View {
     let section: SettingsSection
     let isSelected: Bool
@@ -202,29 +217,32 @@ private struct SettingsSidebarItem: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 10) {
+            HStack(spacing: 9) {
                 SettingsTileIcon(name: section.icon, tint: section.tint, size: 22)
                 Text(section.title)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
-                    .foregroundStyle(isSelected ? OtoUI.primaryFG : OtoSettingsUI.valueFG)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(isSelected ? OtoSettingsUI.primaryText : OtoSettingsUI.secondaryText.opacity(0.92))
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 8)
-            .padding(.vertical, 6)
+            .frame(height: 36)
             .background(
-                isSelected ? OtoSettingsUI.tabSelected : (isHovering ? OtoSettingsUI.tabHover : Color.clear),
-                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                isSelected ? OtoSettingsUI.sidebarActive : (isHovering ? OtoSettingsUI.sidebarHover : Color.clear),
+                in: RoundedRectangle(cornerRadius: 9, style: .continuous)
             )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
-        .animation(OtoUI.hoverEase, value: isHovering)
+        .animation(.easeOut(duration: 0.18), value: isHovering)
+        .animation(.easeOut(duration: 0.18), value: isSelected)
     }
 }
 
-/// The vivid rounded-square icon tile used in the sidebar and page header.
+/// Vivid rounded-square gradient icon tile — used for the settings sidebar and
+/// page-header icons (LookAway style) as well as content rows and feature
+/// screens (wellness navigation rows, the "stepped away" break screen).
 struct SettingsTileIcon: View {
     let name: String
     let tint: Color
@@ -234,11 +252,21 @@ struct SettingsTileIcon: View {
         RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
             .fill(
                 LinearGradient(
-                    colors: [tint.opacity(0.95), tint.opacity(0.7)],
+                    colors: [tint.opacity(1.0), tint.opacity(0.66)],
                     startPoint: .top, endPoint: .bottom
                 )
             )
             .frame(width: size, height: size)
+            .overlay {
+                RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.4), .clear],
+                            startPoint: .top, endPoint: .center
+                        )
+                    )
+                    .blendMode(.softLight)
+            }
             .overlay {
                 OtoIcon(name: name, size: size * 0.52, weight: .semibold)
                     .foregroundStyle(.white)
@@ -268,7 +296,7 @@ private struct GeneralSettingsContent: View {
                 }
             }
 
-            SettingsContentSection(title: "Menu bar") {
+            SettingsContentSection(title: "Menu bar", divided: false) {
                 MenuBarPreview()
                     .padding(.bottom, 4)
                 HStack(alignment: .top, spacing: 12) {
@@ -344,25 +372,34 @@ private struct MenuBarOptionColumn<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(title)
                     .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(OtoUI.primaryFG)
+                    .foregroundStyle(OtoSettingsUI.primaryText)
                 Spacer()
                 Toggle("", isOn: $isOn).toggleStyle(.switch).labelsHidden()
                     .scaleEffect(0.85)
             }
+            .frame(height: 28)
+
+            Rectangle()
+                .fill(OtoSettingsUI.hairline)
+                .frame(height: 1)
+                .opacity(0.7)
+
             content
                 .disabled(!isOn)
                 .opacity(isOn ? 1 : 0.5)
         }
-        .padding(12)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(OtoSettingsUI.subtleFill, in: RoundedRectangle(cornerRadius: OtoSettingsUI.controlRadius, style: .continuous))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: OtoSettingsUI.controlRadius, style: .continuous))
+        .background(OtoSettingsUI.panelSurface, in: RoundedRectangle(cornerRadius: OtoSettingsUI.controlRadius, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: OtoSettingsUI.controlRadius, style: .continuous)
-                .strokeBorder(OtoSettingsUI.glassStroke, lineWidth: 1)
+                .strokeBorder(OtoSettingsUI.cardStroke, lineWidth: 1)
         }
     }
 }
@@ -376,12 +413,12 @@ private struct MenuBarMiniRow<Content: View>: View {
     var body: some View {
         HStack(spacing: 8) {
             Text(label)
-                .font(.system(size: 12))
+                .font(.system(size: 12.5, weight: .medium))
                 .foregroundStyle(OtoSettingsUI.labelFG)
             Spacer(minLength: 6)
             content
         }
-        .frame(minHeight: 28)
+        .frame(minHeight: 31)
     }
 }
 
@@ -901,13 +938,8 @@ private struct AboutSettingsContent: View {
 
 // MARK: - Shared Settings Components
 
-/// Grouped settings card with an optional small uppercase header.
-///
-/// Notion-style flat aesthetic: one solid surface that's barely a shade
-/// lighter than the page, a single hairline border, nothing else. No
-/// material, no tint, no top-highlight gradient, no drop shadow. The
-/// visual hierarchy comes from the section title above and the footnote
-/// below — typography carries the structure, not chrome.
+/// Grouped LookAway-style settings card with an optional header, compact row
+/// padding, and subtle dividers between direct child rows.
 ///
 /// `footnote` renders below the card as small muted text — the right
 /// place for non-actionable descriptions like "Attempts above the cap
@@ -915,41 +947,72 @@ private struct AboutSettingsContent: View {
 struct SettingsContentSection<Content: View>: View {
     var title: String? = nil
     var footnote: String? = nil
-    var verticalPadding: CGFloat = 14
+    var verticalPadding: CGFloat = 5
+    var divided: Bool = true
     @ViewBuilder let content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 9) {
             if let title {
-                Text(title.uppercased())
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .tracking(0.6)
-                    .foregroundStyle(OtoSettingsUI.quietFG)
-                    .padding(.leading, 4)
+                Text(title)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(OtoSettingsUI.primaryText.opacity(0.86))
+                    .padding(.leading, 10)
             }
 
-            let shape = RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous)
-            VStack(spacing: 4) {
-                content
+            Group {
+                if divided {
+                    DividedRows { content }
+                } else {
+                    VStack(spacing: 8) { content }
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, verticalPadding)
-            .padding(.horizontal, 14)
-            .background(OtoSettingsUI.cardFill, in: shape)
-            .overlay {
-                shape.strokeBorder(OtoSettingsUI.glassStroke, lineWidth: 1)
-            }
+            .padding(.horizontal, 10)
+            .otoSectionCard(cornerRadius: OtoSettingsUI.cardRadius)
 
             if let footnote {
                 Text(footnote)
                     .font(.system(size: 11))
-                    .foregroundStyle(OtoSettingsUI.quietFG)
-                    .padding(.horizontal, 4)
+                    .foregroundStyle(OtoSettingsUI.tertiaryText)
+                    .padding(.horizontal, 2)
                     .padding(.top, 2)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Lays out child rows with a hairline divider between each — the native
+/// grouped-list look — without callers having to track which row is last.
+/// Uses `_VariadicView` so it works on the macOS 14 deployment target
+/// (`Group(subviews:)` requires macOS 15).
+private struct DividedRows<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        _VariadicView.Tree(DividedRowsLayout()) { content }
+    }
+}
+
+private struct DividedRowsLayout: _VariadicView.MultiViewRoot {
+    @ViewBuilder
+    func body(children: _VariadicView.Children) -> some View {
+        let lastID = children.last?.id
+        VStack(spacing: 0) {
+            ForEach(children) { child in
+                child
+                if child.id != lastID {
+                    Rectangle()
+                        .fill(OtoSettingsUI.hairline)
+                        .frame(height: 1)
+                        .padding(.leading, 0)
+                        .opacity(0.7)
+                }
+            }
+        }
     }
 }
 
@@ -973,10 +1036,10 @@ struct SettingsLinkButtonContent: View {
         }
         .padding(.horizontal, 12)
         .frame(maxWidth: .infinity)
-        .frame(height: 30)
-        .background(
-            isHovering ? OtoSettingsUI.tabHover : OtoSettingsUI.controlFill,
-            in: RoundedRectangle(cornerRadius: OtoSettingsUI.controlRadius, style: .continuous)
+        .frame(height: 25)
+        .otoControlGlass(
+            in: RoundedRectangle(cornerRadius: OtoSettingsUI.controlRadius, style: .continuous),
+            interactive: true
         )
         .foregroundStyle(OtoSettingsUI.valueFG)
         .contentShape(Rectangle())
@@ -994,16 +1057,16 @@ struct SettingsFieldRow<Content: View>: View {
             Text(label)
                 .font(.system(size: 12.5, weight: .medium))
                 .foregroundStyle(OtoSettingsUI.labelFG)
-                .frame(width: 112, alignment: .leading)
+                .frame(minWidth: 0, alignment: .leading)
 
             content
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(OtoSettingsUI.valueFG)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .frame(minHeight: 36)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .frame(minHeight: 34)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 2)
+        .frame(minHeight: 34)
     }
 }
 
@@ -1015,25 +1078,7 @@ private struct SettingsCard<Content: View>: View {
         content
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous))
-            .background(OtoSettingsUI.cardFill, in: RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous)
-                    .strokeBorder(OtoSettingsUI.glassStroke, lineWidth: 1)
-            }
-            .overlay(alignment: .top) {
-                RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [OtoSettingsUI.glassHighlight, .clear],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .frame(height: 38)
-                    .allowsHitTesting(false)
-            }
-            .shadow(color: Color.black.opacity(0.08), radius: 10, x: 0, y: 6)
+            .otoSectionCard(cornerRadius: OtoSettingsUI.cardRadius)
     }
 }
 
@@ -1093,13 +1138,9 @@ private struct SettingsRowIcon: View {
     var body: some View {
         OtoIcon(name: name, size: 16)
             .frame(width: 34, height: 34)
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: OtoUI.buttonRadius, style: .continuous))
-            .background(OtoSettingsUI.controlFill, in: RoundedRectangle(cornerRadius: OtoUI.buttonRadius, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: OtoUI.buttonRadius, style: .continuous)
-                    .strokeBorder(OtoSettingsUI.glassStroke, lineWidth: 1)
-            }
-            .foregroundStyle(OtoSettingsUI.valueFG)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .background(OtoSettingsUI.panelSurfaceRaised, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .foregroundStyle(OtoSettingsUI.secondaryText)
     }
 }
 
@@ -1119,9 +1160,12 @@ private struct SettingsWindowConfigurator: NSViewRepresentable {
             guard let window = view.window else { return }
             window.isOpaque = false
             window.backgroundColor = .clear
+            window.styleMask.insert(.fullSizeContentView)
             window.titlebarAppearsTransparent = true
             window.titleVisibility = .hidden
+            window.titlebarSeparatorStyle = .none
             window.isMovableByWindowBackground = true
+            window.hasShadow = true
         }
     }
 }

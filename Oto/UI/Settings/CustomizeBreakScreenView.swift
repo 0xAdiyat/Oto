@@ -71,10 +71,6 @@ struct CustomizeBreakScreenView: View {
             }
             .padding(14)
             .background(OtoSettingsUI.cardFill, in: RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous)
-                    .strokeBorder(OtoSettingsUI.glassStroke, lineWidth: 1)
-            }
         }
         .padding(22)
         .frame(width: 460)
@@ -132,10 +128,6 @@ struct CustomizeBreakScreenView: View {
         .frame(height: 150)
         .frame(maxWidth: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: OtoSettingsUI.cardRadius, style: .continuous)
-                .strokeBorder(OtoSettingsUI.glassStroke, lineWidth: 1)
-        }
     }
 
     // MARK: Image picker
