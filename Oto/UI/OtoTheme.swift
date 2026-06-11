@@ -44,6 +44,21 @@ extension Color {
         dark:  NSColor(srgbRed: 0.070, green: 0.078, blue: 0.145, alpha: 1)
     )
 
+    // MARK: - Vivid tile palette (LookAway-style settings icons)
+    //
+    // The settings sidebar / page-header icons render as colourful gradient
+    // tiles (`SettingsTileIcon`). These hues are intentionally vivid and varied
+    // — one distinct colour per section — independent of the teal brand accent
+    // used by controls. Fixed (non-adaptive): the settings window is dark-only.
+    static let tilePurple = Color(.sRGB, red: 0.58, green: 0.35, blue: 0.96)
+    static let tileGreen  = Color(.sRGB, red: 0.30, green: 0.78, blue: 0.47)
+    static let tileIndigo = Color(.sRGB, red: 0.42, green: 0.45, blue: 0.95)
+    static let tilePink   = Color(.sRGB, red: 0.96, green: 0.36, blue: 0.62)
+    static let tileCoral  = Color(.sRGB, red: 0.96, green: 0.38, blue: 0.36)
+    static let tileOrange = Color(.sRGB, red: 0.98, green: 0.62, blue: 0.20)
+    static let tileBlue   = Color(.sRGB, red: 0.25, green: 0.58, blue: 0.98)
+    static let tileAmber  = Color(.sRGB, red: 0.98, green: 0.78, blue: 0.25)
+
     /// Build a Color whose underlying NSColor resolves per-appearance. In dark
     /// mode (`darkAqua` / `vibrantDark`) returns `dark`; otherwise `light`.
     private static func adaptive(light: NSColor, dark: NSColor) -> Color {
@@ -166,31 +181,74 @@ enum OtoUI {
     }
 }
 
+/// Settings window design tokens.
+///
+/// **Dark-mode only**, by design: a LookAway-style transparent graphite /
+/// blue-black settings shell with compact grouped rows, soft glass depth, and
+/// colorful square icon tiles. It intentionally uses fixed colors so the
+/// Settings window preserves the reference aesthetic in both macOS Light and
+/// Dark appearance.
+///
+/// Surface ladder (darkest → lightest): `windowBase` < `contentSurface` <
+/// `sidebarSurface` < `panelSurface` < `panelSurfaceRaised`.
 enum OtoSettingsUI {
-    static let windowWidth: CGFloat        = 900
-    static let windowHeight: CGFloat       = 640
-    static let contentMaxWidth: CGFloat    = 540
+    // MARK: Layout
+    static let windowWidth: CGFloat        = 860
+    static let windowHeight: CGFloat       = 690
+    static let sidebarWidth: CGFloat       = 230
+    static let windowRadius: CGFloat       = 18
+    static let cardRadius: CGFloat         = 11
+    static let controlRadius: CGFloat      = 9
+    static let rowRadius: CGFloat          = 9
+    static let contentPadding: CGFloat     = 22
+    static let contentMaxWidth: CGFloat    = 560
     static let contentTopPadding: CGFloat  = 22
     static let sectionSpacing: CGFloat     = 22
-    static let cardSpacing: CGFloat        = 10
-    static let cardPadding: CGFloat        = 14
-    static let topBarHeight: CGFloat       = 64
+    static let sidebarSectionSpacing: CGFloat = 16
+    static let cardSpacing: CGFloat        = 8
+    static let cardPadding: CGFloat        = 10
+    static let topBarHeight: CGFloat       = 56
     static let topTabWidth: CGFloat        = 84
     static let topTabHeight: CGFloat       = 46
-    static let cardRadius: CGFloat         = 12
-    static let controlRadius: CGFloat      = 10
-    static let tabSelected                 = Color.primary.opacity(0.12)
-    static let tabHover                    = Color.primary.opacity(0.06)
-    static let cardFill                    = Color.primary.opacity(0.04)
-    static let controlFill                 = Color.primary.opacity(0.095)
-    static let subtleFill                  = Color.primary.opacity(0.035)
-    static let glassStroke                 = Color.primary.opacity(0.16)
-    static let strongStroke                = Color.primary.opacity(0.24)
-    static let glassHighlight              = Color.white.opacity(0.07)
-    static let labelFG                     = Color.primary.opacity(0.72)
-    static let valueFG                     = Color.primary.opacity(0.88)
-    static let quietFG                     = Color.primary.opacity(0.58)
-    static let windowShadow                = Color.black.opacity(0.26)
+
+    // MARK: LookAway graphite glass surfaces
+    static let windowBase                  = Color(red: 0.060, green: 0.070, blue: 0.095)
+    static let contentSurface              = Color(red: 0.080, green: 0.090, blue: 0.120).opacity(0.30)
+    static let sidebarSurface              = Color(red: 0.095, green: 0.105, blue: 0.145).opacity(0.58)
+    static let sidebarSurfaceDim           = Color(red: 0.055, green: 0.065, blue: 0.095).opacity(0.48)
+    static let panelSurface                = Color(red: 0.145, green: 0.155, blue: 0.195).opacity(0.46)
+    static let panelSurfaceRaised          = Color(red: 0.215, green: 0.225, blue: 0.270).opacity(0.56)
+
+    // MARK: Interaction fills
+    static let sidebarActive               = Color.white.opacity(0.115)
+    static let sidebarHover                = Color.white.opacity(0.060)
+    static let rowHover                    = Color.white.opacity(0.045)
+
+    // MARK: Strokes / hairlines
+    static let windowBorder                = Color.white.opacity(0.16)
+    static let cardStroke                  = Color.white.opacity(0.095)
+    static let hairline                    = Color.white.opacity(0.105)
+
+    // MARK: Text
+    static let primaryText                 = Color.white.opacity(0.92)
+    static let secondaryText               = Color.white.opacity(0.74)
+    static let tertiaryText                = Color.white.opacity(0.48)
+
+    // MARK: Legacy aliases (consumed across the wellness panes) — remapped to
+    // the new layered palette so every pane inherits the redesign for free.
+    static let tabSelected                 = sidebarActive
+    static let tabSelectedStroke           = Color.white.opacity(0.08)
+    static let tabHover                    = sidebarHover
+    static let cardFill                    = panelSurface
+    static let controlFill                 = Color.white.opacity(0.07)
+    static let subtleFill                  = Color.white.opacity(0.04)
+    static let glassStroke                 = cardStroke
+    static let strongStroke                = Color.white.opacity(0.13)
+    static let glassHighlight              = Color.white.opacity(0.045)
+    static let labelFG                     = secondaryText
+    static let valueFG                     = primaryText
+    static let quietFG                     = tertiaryText
+    static let windowShadow                = Color.black.opacity(0.48)
 }
 
 // MARK: - Reusable view modifiers

@@ -38,6 +38,22 @@ final class NotificationService {
         UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
     }
 
+    /// Posts a wellbeing reminder (posture / blink). Separate identifier per
+    /// kind so a new reminder of the same kind replaces the previous banner
+    /// rather than stacking.
+    func notifyWellness(identifier: String, title: String, body: String, playSound: Bool) {
+        guard enabled else { return }
+        requestAuthorizationIfNeeded()
+
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = playSound ? .default : nil
+
+        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
+    }
+
     /// Posts a notice that the quiet-hours guardrail clamped the user's
     /// volume. Separate from `notifyRuleFired` because this isn't a rule
     /// firing — it's a continuous safety net the user opted in to.

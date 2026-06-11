@@ -6,5 +6,18 @@
 	<true/>
 	<key>com.apple.security.device.bluetooth</key>
 	<true/>
+	<!-- Smart Pause: pause breaks during ongoing calendar events (EventKit). -->
+	<key>com.apple.security.personal-information.calendars</key>
+	<true/>
+	<!-- Stats: read the active-tab URL from supported browsers via Apple Events.
+	     NOTE: under the sandbox, targeting specific browsers may additionally
+	     require per-app temporary-exception entitlements (or a non-sandboxed
+	     build) — see the spec's deploy follow-ups. -->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+	<!-- Customize break screen: import a background image the user picks, and
+	     re-resolve its security-scoped bookmark on later launches. -->
+	<key>com.apple.security.files.user-selected.read-only</key>
+	<true/>
 </dict>
 </plist>

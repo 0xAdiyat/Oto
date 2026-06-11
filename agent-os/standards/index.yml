@@ -1,0 +1,12 @@
+# Agent OS Standards Index
+architecture:
+  rules-and-audio:
+    description: Rule engine event flow, CoreAudio timing guards/debounce, action application, error handling
+global:
+  state-management:
+    description: "@Observable architecture, AppState composition root, UserDefaults JSON persistence, schema migration, undo"
+ui:
+  theming:
+    description: OtoTheme design tokens, adaptive light/dark color helpers, materialPanel surfaces
+  view-patterns:
+    description: SwiftUI view structure, OtoIcon SF Symbols, IconButton/hover, focus rings, in-panel sheets
